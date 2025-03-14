@@ -1,0 +1,24 @@
+sequenceDiagram
+    participant IngestionPipeline
+    participant Database
+    participant Ingestor
+    participant Preprocessor
+    participant Embedder
+    participant VectorStore
+    participant Logger
+
+    loop Every Interval
+        IngestionPipeline->>Database: Retrieve last_timestamp for ingestor_id
+        Database-->>IngestionPipeline: last_timestamp
+        IngestionPipeline->>Ingestor: fetch_new_data(since=last_timestamp)
+        Ingestor-->>IngestionPipeline: raw_data
+        IngestionPipeline->>Preprocessor: preprocess(raw_data)
+        Preprocessor-->>IngestionPipeline: processed_data
+        IngestionPipeline->>Embedder: embed(processed_data['text'])
+        Embedder-->>IngestionPipeline: vectors
+        IngestionPipeline->>VectorStore: store_documents(processed_data, vectors)
+        VectorStore-->>IngestionPipeline: success
+        IngestionPipeline->>Database: Update last_timestamp for ingestor_id
+        Database-->>IngestionPipeline: success
+        IngestionPipeline->>Logger: Log ingestion cycle completion
+    end

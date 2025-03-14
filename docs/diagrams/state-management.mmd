@@ -1,0 +1,12 @@
+sequenceDiagram
+    participant IngestionPipeline
+    participant Database
+    participant Logger
+
+    IngestionPipeline->>Database: SELECT last_timestamp FROM ingestor_state WHERE ingestor_id='id'
+    Database-->>IngestionPipeline: last_timestamp
+    IngestionPipeline->>Logger: Log retrieved last_timestamp
+    %% Ingestion process occurs here...
+    IngestionPipeline->>Database: UPDATE ingestor_state SET last_timestamp=new_timestamp WHERE ingestor_id='id'
+    Database-->>IngestionPipeline: success
+    IngestionPipeline->>Logger: Log state update

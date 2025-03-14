@@ -1,0 +1,43 @@
+sequenceDiagram
+    participant Main
+    participant ConfigLoader
+    participant Database
+    participant Logger
+    participant Ingestor
+    participant Preprocessor
+    participant Embedder
+    participant VectorStore
+    participant Validator
+    participant PromptBuilder
+    participant Generator
+    participant IngestionPipeline
+    participant Orchestrator
+
+    Main->>ConfigLoader: Load configuration from YAML
+    ConfigLoader-->>Main: config
+    Main->>Database: Connect to SQLite (config["database"]["path"])
+    Database-->>Main: db_connection
+    Main->>Logger: Initialize Logger (config["logger"])
+    Logger-->>Main: logger_instance
+    Main->>Ingestor: Initialize Ingestor (config["ingestors"])
+    Ingestor-->>Main: ingestor_instance
+    Main->>Preprocessor: Initialize Preprocessor
+    Preprocessor-->>Main: preprocessor_instance
+    Main->>Embedder: Initialize Embedder (config["embedder"])
+    Embedder-->>Main: embedder_instance
+    Main->>VectorStore: Initialize VectorStore (config["vector_store"])
+    VectorStore-->>Main: vector_store_instance
+    Main->>Validator: Initialize Validator (config["validator"])
+    Validator-->>Main: validator_instance
+    Main->>PromptBuilder: Initialize PromptBuilder (config["prompt_builder"])
+    PromptBuilder-->>Main: prompt_builder_instance
+    Main->>Generator: Initialize Generator (config["generator"])
+    Generator-->>Main: generator_instance
+    Main->>IngestionPipeline: Initialize IngestionPipeline(ingestor, preprocessor, embedder, vector_store, db_connection, logger, config["ingestion_pipeline"])
+    IngestionPipeline-->>Main: ingestion_pipeline_instance
+    Main->>Orchestrator: Initialize Orchestrator(validator, embedder, vector_store, prompt_builder, generator, logger, config["orchestrator"])
+    Orchestrator->>Orchestrator: Configure rules_source and context_filters
+    Orchestrator->>Orchestrator: Set up retry mechanisms
+    Orchestrator-->>Main: orchestrator_instance
+    Main->>IngestionPipeline: Start ingestion in a separate thread
+    Main->>Orchestrator: Ready to process queries

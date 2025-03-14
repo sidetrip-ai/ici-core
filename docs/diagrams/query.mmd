@@ -1,0 +1,29 @@
+sequenceDiagram
+    participant User
+    participant Orchestrator
+    participant Validator
+    participant Embedder
+    participant VectorStore
+    participant PromptBuilder
+    participant Generator
+    participant Logger
+
+    User->>Orchestrator: process_query(input, user_id)
+    Orchestrator->>Orchestrator: get_rules(user_id)
+    Orchestrator->>Orchestrator: build_context(user_id)
+    Orchestrator->>Validator: validate(input, context, rules)
+    Validator-->>Orchestrator: validation_result
+    alt validation_result == True
+        Orchestrator->>Embedder: embed(input)
+        Embedder-->>Orchestrator: query_vector
+        Orchestrator->>VectorStore: search(query_vector, num_results, filters={'user_id': user_id})
+        VectorStore-->>Orchestrator: documents
+        Orchestrator->>PromptBuilder: build_prompt(input, documents)
+        PromptBuilder-->>Orchestrator: prompt
+        Orchestrator->>Generator: generate(prompt)
+        Generator-->>Orchestrator: output
+        Orchestrator-->>User: output
+    else
+        Orchestrator-->>User: "Access denied"
+    end
+    Orchestrator->>Logger: Log query processing

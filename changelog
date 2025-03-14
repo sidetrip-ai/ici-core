@@ -1,0 +1,119 @@
+```yaml
+Date: 2025-03-13
+Author: AI Assistant
+Summary: Updated project specifications to ICI framework
+Reason: Align documentation with new Intelligent Consciousness Interface architecture
+Related Issue/Ticket: None
+Files Affected: 
+  - docs/functional-requirements.md
+  - docs/tech-specs.md
+  - docs/status.md
+Additional Notes: Replaced Telegram-specific architecture with the ICI's modular pipeline system, including detailed component interfaces and data flows.
+```
+
+```yaml
+Date: 2025-03-13
+Author: AI Assistant
+Summary: Updated project issues to align with ICI architecture
+Reason: Ensure development roadmap matches new ICI specifications
+Related Issue/Ticket: None
+Files Affected: docs/project-issues.md, docs/status.md
+Additional Notes: Complete restructuring of issues, milestones, and acceptance criteria to facilitate ICI implementation instead of Telegram-specific functionality
+```
+
+```yaml
+Date: 2025-03-13
+Author: AI Assistant
+Summary: Enhanced technical specifications and functional requirements with detailed design principles
+Reason: Provide comprehensive implementation guidance with design choice theses
+Related Issue/Ticket: None
+Files Affected: 
+  - docs/tech-specs.md
+  - docs/functional-requirements.md
+  - docs/status.md
+Additional Notes: Added design choice thesis for each component, introduced the IngestionPipeline component, and added new sections on core design principles. Enhanced both documents with more detailed interfaces and data flow explanations.
+```
+
+```yaml
+Date: 2025-03-13
+Author: AI Assistant
+Summary: Enhanced technical specifications document with detailed component interfaces and data flow
+Reason: To provide comprehensive implementation guidance and design rationales
+Related Issue/Ticket: None
+Files Affected: docs/tech-specs.md
+Additional Notes: Expanded technical specifications with more detailed component interfaces, comprehensive error handling strategies, and clear design rationales. Added explicit exception hierarchies, advanced metadata filtering capabilities, and performance considerations for each pipeline.
+```
+
+```yaml
+Date: 2025-03-13
+Author: AI Assistant
+Summary: Enhanced project issues to align with updated technical specifications
+Reason: To provide a comprehensive development roadmap that addresses all aspects of the ICI framework
+Related Issue/Ticket: None
+Files Affected: docs/project-issues.md, docs/status.md
+Additional Notes: Added new issues for Error Handling Framework and IngestionPipeline Implementation. Enhanced acceptance criteria to include advanced filtering capabilities, design rationales, and fault tolerance requirements.
+```
+
+```yaml
+Date: 2025-03-13
+Author: AI Assistant
+Summary: Enhanced technical specifications and functional requirements based on diagram analysis
+Reason: To ensure alignment between diagrams and documentation for a more comprehensive system specification
+Related Issue/Ticket: None
+Files Affected: 
+  - docs/tech-specs.md
+  - docs/functional-requirements.md
+Additional Notes: Added new section on Pipeline Interaction and Dependencies, enhanced state management details, added system initialization requirements, and included multi-ingestor support and error handling with retries.
+```
+
+```yaml
+Date: 2025-03-13
+Author: AI Assistant
+Summary: Enhanced project issues to align with updated technical specifications
+Reason: To provide a comprehensive development roadmap that addresses all aspects of the ICI framework
+Related Issue/Ticket: None
+Files Affected: docs/project-issues.md, docs/status.md
+Additional Notes: Added new issues for Error Handling Framework and IngestionPipeline Implementation. Enhanced acceptance criteria to include advanced filtering capabilities, design rationales, and fault tolerance requirements.
+```
+
+```yaml
+Date: 2025-03-13
+Author: AI Assistant
+Summary: Updated technical specifications and project issues to reflect new Orchestrator behavior
+Reason: Implement dynamic rule and context retrieval for enhanced security and personalization
+Related Issue/Ticket: None
+Files Affected: 
+  - docs/tech-specs.md
+  - docs/functional-requirements.md
+  - docs/project-issues.md
+  - docs/diagrams/query.mmd
+  - docs/diagrams/class.mmd
+  - docs/diagrams/initialisation.mmd
+  - docs/status.md
+Additional Notes: Modified Orchestrator interface to use user_id parameter instead of context and rules, added dynamic rule and context retrieval, enhanced error handling with retry mechanisms, and updated PromptBuilder with robust fallback mechanisms.
+```
+
+```yaml
+Date: 2025-03-13
+Author: AI Assistant
+Summary: Enhanced technical specifications and functional requirements based on diagram analysis
+Reason: Ensure alignment between documentation and system diagrams
+Related Issue/Ticket: None
+Files Affected:
+  - docs/tech-specs.md
+  - docs/functional-requirements.md
+  - docs/status.md
+Additional Notes: Added new sections on Pipeline Interaction and Dependencies, enhanced state management details, and added requirements for multi-ingestor support and concurrent operation.
+```
+
+```yaml
+Date: 2025-03-13
+Author: AI Assistant
+Summary: Enhanced project issues to reflect updated technical specifications
+Reason: Align development roadmap with latest technical specifications
+Related Issue/Ticket: None
+Files Affected:
+  - docs/project-issues.md
+  - docs/status.md
+Additional Notes: Added new issues for Error Handling Framework and IngestionPipeline Implementation. Enhanced acceptance criteria to include advanced filtering capabilities, design rationales, and fault tolerance requirements.
+```

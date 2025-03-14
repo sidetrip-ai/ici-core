@@ -1,0 +1,79 @@
+classDiagram
+    %% Ingestion Pipeline Classes
+    class IngestionPipeline {
+        +run_ingestion(ingestor_id: str) None
+        +start() None
+    }
+    class Ingestor {
+        +fetch_full_data() Any
+        +fetch_new_data(since: Optional[datetime]) Any
+        +fetch_data_in_range(start: datetime, end: datetime) Any
+    }
+    class Preprocessor {
+        +preprocess(raw_data: Any) List[Dict[str, Any]]
+    }
+    class Embedder {
+        +embed(text: str) List[float]
+    }
+    class VectorStore {
+        +store_documents(documents: List[Dict[str, Any]]) None
+        +search(query_vector: List[float], num_results: int, filters: Dict[str, Any]) List[Dict[str, Any]]
+    }
+
+    %% Query Pipeline Classes
+    class Orchestrator {
+        +process_query(input: str, user_id: str) str
+        -get_rules(user_id: str) List[Dict[str, Any]]
+        -build_context(user_id: str) Dict[str, Any]
+    }
+    class Validator {
+        +validate(input: str, context: Dict[str, Any], rules: List[Dict[str, Any]]) bool
+    }
+    class PromptBuilder {
+        +build_prompt(input: str, documents: List[Dict[str, Any]]) str
+    }
+    class Generator {
+        +generate(prompt: str) str
+    }
+
+    %% Shared Components
+    class Logger {
+        +debug(message: str, *args: Any) None
+        +info(message: str, *args: Any) None
+        +warning(message: str, *args: Any) None
+        +error(message: str, *args: Any) None
+        +critical(message: str, *args: Any) None
+    }
+    class ingestor_state {
+        +ingestor_id: TEXT
+        +last_timestamp: INTEGER
+        +additional_metadata: TEXT
+    }
+
+    %% Relationships
+    IngestionPipeline --> Ingestor : uses
+    IngestionPipeline --> Preprocessor : uses
+    IngestionPipeline --> Embedder : uses
+    IngestionPipeline --> VectorStore : uses
+    IngestionPipeline --> ingestor_state : manages state
+
+    Orchestrator --> Validator : uses
+    Orchestrator --> Embedder : uses
+    Orchestrator --> VectorStore : uses
+    Orchestrator --> PromptBuilder : uses
+    Orchestrator --> Generator : uses
+
+    Logger <.. IngestionPipeline : logs
+    Logger <.. Orchestrator : logs
+    Logger <.. Ingestor : logs
+    Logger <.. Preprocessor : logs
+    Logger <.. Embedder : logs
+    Logger <.. VectorStore : logs
+    Logger <.. Validator : logs
+    Logger <.. PromptBuilder : logs
+    Logger <.. Generator : logs
+
+    %% Comments
+    note for IngestionPipeline "Coordinates ingestion components and manages scheduling."
+    note for Orchestrator "Manages the query workflow from validation to response generation."
+    note for ingestor_state "Database table for tracking ingestion progress."
