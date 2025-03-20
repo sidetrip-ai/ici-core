@@ -1,0 +1,17 @@
+# Core dependencies
+pyyaml>=6.0
+
+# Development dependencies
+pytest>=7.0.0
+pytest-cov>=4.0.0
+pytest-asyncio>=0.25.0
+black>=23.0.0
+
+# Optional dependencies - uncomment as needed
+sentence-transformers>=2.2.2  # For text embeddings
+torch>=2.0.0                 # Required for sentence-transformers
+# faiss-cpu>=1.7.0              # For vector similarity search
+telethon>=1.28.0               # For Telegram API access
+chromadb>=0.4.22               # For ChromaDB vector database
+numpy>=1.22.0                  # Required for vector operations
+logtail-python>=0.3.3

@@ -1,0 +1,54 @@
+# ICI Framework - Configuration File
+# Copy this file to config.yaml and update with your credentials
+
+# Ingestors Configuration
+ingestors:
+  # Telegram Ingestor
+  telegram:
+    # API credentials from https://my.telegram.org
+    api_id: "YOUR_API_ID"  # Replace with your API ID (as a string)
+    api_hash: "YOUR_API_HASH"  # Replace with your API hash
+    phone_number: "+1234567890"  # Replace with your phone number including country code
+    session_string: ""  # This will be auto-generated on first run if left empty
+    request_delay: 1.0  # Delay between API requests in seconds
+
+# Preprocessor Configuration
+preprocessors:
+  telegram:
+    # Message chunking settings
+    chunk_size: 1000  # Maximum characters per chunk
+    chunk_overlap: 100  # Character overlap between chunks
+    group_by_conversation: true  # Whether to group messages by conversation
+    minimum_message_length: 10  # Skip messages shorter than this
+    include_metadata: true  # Include message metadata in the output
+
+# Embedder Configuration
+embedders:
+  sentence_transformer:
+    model_name: "all-MiniLM-L6-v2"  # Default model
+    device: "auto"  # "auto", "cpu", "cuda", or "mps"
+    batch_size: 32  # Batch size for processing
+    normalize: true  # Whether to normalize embeddings
+
+# Vector Store Configuration
+vector_stores:
+  chroma:
+    persist_directory: "data/chroma"  # Directory to store the database
+    collection_name: "messages"  # Default collection name
+    embedding_function: "sentence_transformer"  # Name of the embedder to use
+    distance_metric: "cosine"  # Distance metric for similarity searches
+    
+# Pipeline Configuration
+pipelines:
+  telegram:
+    batch_size: 100  # Number of items to process in each batch
+    schedule_interval_minutes: 60  # For scheduled runs, how often to check for new data
+    state_db_path: "data/state/telegram_pipeline.db"  # Path to SQLite state database
+    incremental: true  # Whether to perform incremental updates by default
+    
+# Logging Configuration
+logging:
+  level: "INFO"  # DEBUG, INFO, WARNING, ERROR, CRITICAL
+  format: "structured"  # structured or text
+  output: "console"  # console or file
+  file_path: "logs/ici.log"  # Only used if output is file 
