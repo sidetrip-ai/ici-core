@@ -497,7 +497,7 @@ class TelegramIngestor(Ingestor):
                 "action": "TELEGRAM_GET_MESSAGES_ENTITY",
                 "message": f"Fetched entity for conversation {conversation_id}",
                 "data": {
-                    "entity": entity,
+                    # "entity": entity,
                     "limit": limit,
                     "min_id": min_id,
                     "max_id": max_id
@@ -507,16 +507,14 @@ class TelegramIngestor(Ingestor):
             # Get messages from this entity
             telegram_messages = await client.get_messages(
                 entity,
-                limit=limit,
-                min_id=min_id,
-                max_id=max_id
+                limit=limit
             )
 
-            self.logger.info({
-                "action": "TELEGRAM_GET_MESSAGES_ENTITY",
-                "message": f"Fetched entity for conversation {conversation_id}",
-                "data": {"telegram_messages": telegram_messages}
-            })
+            # self.logger.info({
+            #     "action": "TELEGRAM_GET_MESSAGES_ENTITY",
+            #     "message": f"Fetched entity for conversation {conversation_id}",
+            #     "data": {"telegram_messages": telegram_messages}
+            # })
             
             # Process each message
             for msg in telegram_messages:

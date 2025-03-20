@@ -180,11 +180,11 @@ class ChromaDBStore(VectorStore):
                 ids=ids
             )
             
-            self.logger.info({
-                "action": "VECTOR_STORE_ADD",
-                "message": f"Added {len(documents)} documents to vector store",
-                "data": {"count": len(documents), "collection_count": self._client.count_collections(), "get_settings": self._client.get_settings() }
-            })
+            # self.logger.info({
+            #     "action": "VECTOR_STORE_ADD",
+            #     "message": f"Added {len(documents)} documents to vector store",
+            #     "data": {"count": len(documents), "collection_count": self._client.count_collections(), "get_settings": self._client.get_settings() }
+            # })
             
             return ids
             
