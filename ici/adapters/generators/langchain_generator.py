@@ -274,15 +274,15 @@ class LangchainGenerator(Generator):
                         # Use the temporary LLM for this request if created
                         if temp_llm:
                             chain = LLMChain(llm=temp_llm, prompt=self._prompt_template)
-                            response = await asyncio.to_thread(chain.run, prompt=prompt)
+                            response = await chain.ainvoke({"prompt": prompt})
                         else:
-                            response = await asyncio.to_thread(self._chain.run, prompt=prompt)
+                            response = await self._chain.ainvoke({"prompt": prompt})
                     else:
                         # Use the default chain
-                        response = await asyncio.to_thread(self._chain.run, prompt=prompt)
+                        response = await self._chain.ainvoke({"prompt": prompt})
                     
                     # Extract the generated text
-                    generated_text = response.strip() if response else ""
+                    generated_text = self.extract_text(response)
                     
                     self.logger.info({
                         "action": "GENERATOR_SUCCESS",
@@ -555,3 +555,13 @@ class LangchainGenerator(Generator):
             })
             
             return health_result 
+        
+    def extract_text(self, response):
+        if isinstance(response, str):
+            return response
+        elif isinstance(response, dict):
+            return response.get('text', '')
+        elif hasattr(response, 'content'):
+            return response.content
+        else:
+            return str(response)

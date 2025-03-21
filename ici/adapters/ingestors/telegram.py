@@ -9,6 +9,7 @@ import sys
 import yaml
 import threading
 import json
+import traceback
 from datetime import datetime, timezone, timedelta
 from typing import Any, Dict, Iterator, List, Optional, cast, Generator, Tuple
 
@@ -289,7 +290,7 @@ class TelegramIngestor(Ingestor):
             if session_file and "/" in session_file:
                 session_dir = os.path.dirname(session_file)
                 os.makedirs(session_dir, exist_ok=True)
-            session = session_file
+            session = StringSession()  # Create empty string session for login
         
         # Create a new client with the current thread's event loop
         client = TelegramClient(session, api_id, api_hash)
@@ -314,6 +315,52 @@ class TelegramIngestor(Ingestor):
                     "first_name": me.first_name
                 }
             })
+            
+            # Extract the session string after successful login
+            if isinstance(session, StringSession) and not self._session_string:
+                # Get the session as string
+                current_session_string = client.session.save()
+                self.logger.debug({
+                    "action": "SESSION_STRING_EXTRACTED",
+                    "message": "Session string extracted after successful login"
+                })
+                
+                # Cache it for future use
+                self._session_string = current_session_string
+                
+                # Update the in-memory config
+                if self._config and self._session_string:
+                    self._config["session_string"] = self._session_string
+                
+                # Write the updated config back to the file
+                try:
+                    # Load the full config
+                    with open(self._config_path, 'r') as file:
+                        full_config = yaml.safe_load(file)
+                    
+                    # Update the telegram ingestor section
+                    if "ingestors" not in full_config:
+                        full_config["ingestors"] = {}
+                    if "telegram" not in full_config["ingestors"]:
+                        full_config["ingestors"]["telegram"] = {}
+                    
+                    # Add the session string
+                    full_config["ingestors"]["telegram"]["session_string"] = self._session_string
+                    
+                    # Write back to the file
+                    with open(self._config_path, 'w') as file:
+                        yaml.dump(full_config, file, default_flow_style=False)
+                    
+                    self.logger.info({
+                        "action": "SESSION_STRING_SAVED",
+                        "message": "Saved session string to config file"
+                    })
+                except Exception as e:
+                    self.logger.error({
+                        "action": "SESSION_STRING_SAVE_ERROR",
+                        "message": f"Failed to save session string to config: {str(e)}",
+                        "data": {"error": str(e), "error_type": type(e).__name__}
+                    })
             
             return client
             

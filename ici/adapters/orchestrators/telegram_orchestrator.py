@@ -117,7 +117,7 @@ class TelegramOrchestrator(Orchestrator):
             
             if auto_start and self._pipeline:
                 try:
-                    # await self._pipeline.start()
+                    await self._pipeline.start()
                     self.logger.info({
                         "action": "ORCHESTRATOR_PIPELINE_STARTED",
                         "message": "Pipeline started successfully"
