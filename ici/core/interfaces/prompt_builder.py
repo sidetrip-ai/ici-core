@@ -29,7 +29,7 @@ class PromptBuilder(ABC):
         pass
 
     @abstractmethod
-    def build_prompt(
+    async def build_prompt(
         self,
         input: str,
         documents: List[Dict[str, Any]],
@@ -57,7 +57,7 @@ class PromptBuilder(ABC):
         pass
 
     @abstractmethod
-    def set_template(self, template: str) -> None:
+    async def set_template(self, template: str) -> None:
         """
         Sets a custom template for the prompt builder.
 
@@ -89,7 +89,7 @@ class PromptBuilder(ABC):
         pass
 
     @abstractmethod
-    def healthcheck(self) -> Dict[str, Any]:
+    async def healthcheck(self) -> Dict[str, Any]:
         """
         Checks if the prompt builder is properly configured and functioning.
 

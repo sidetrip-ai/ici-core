@@ -28,7 +28,7 @@ class Validator(ABC):
         pass
 
     @abstractmethod
-    def validate(
+    async def validate(
         self,
         input: str,
         context: Dict[str, Any],
@@ -60,7 +60,7 @@ class Validator(ABC):
         pass
 
     @abstractmethod
-    def healthcheck(self) -> Dict[str, Any]:
+    async def healthcheck(self) -> Dict[str, Any]:
         """
         Checks if the validator is properly configured and functioning.
 

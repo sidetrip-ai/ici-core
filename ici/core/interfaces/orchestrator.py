@@ -29,7 +29,7 @@ class Orchestrator(ABC):
         pass
 
     @abstractmethod
-    def process_query(self, input: str, user_id: str) -> str:
+    async def process_query(self, source: str, user_id: str, query: str, additional_info: Dict[str, Any]) -> str:
         """
         Manages query processing from validation to generation.
 
@@ -45,8 +45,10 @@ class Orchestrator(ABC):
         9. Returns final output or error message
 
         Args:
-            input: The user input/question to process
+            source: The source of the query
             user_id: Identifier for the user making the request
+            query: The user input/question to process
+            additional_info: Dictionary containing additional attributes and values
 
         Returns:
             str: The final response to the user
@@ -57,7 +59,7 @@ class Orchestrator(ABC):
         pass
 
     @abstractmethod
-    def configure(self, config: Dict[str, Any]) -> None:
+    async def configure(self, config: Dict[str, Any]) -> None:
         """
         Configures the orchestrator with the provided settings.
 
@@ -95,7 +97,7 @@ class Orchestrator(ABC):
         pass
 
     @abstractmethod
-    def build_context(self, user_id: str) -> Dict[str, Any]:
+    async def build_context(self, user_id: str) -> Dict[str, Any]:
         """
         Builds validation context for the specified user.
 
@@ -114,7 +116,7 @@ class Orchestrator(ABC):
         pass
 
     @abstractmethod
-    def healthcheck(self) -> Dict[str, Any]:
+    async def healthcheck(self) -> Dict[str, Any]:
         """
         Checks if the orchestrator and all its components are properly configured and functioning.
 

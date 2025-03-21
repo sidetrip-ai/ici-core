@@ -28,7 +28,7 @@ class Generator(ABC):
         pass
 
     @abstractmethod
-    def generate(
+    async def generate(
         self, prompt: str, generation_options: Optional[Dict[str, Any]] = None
     ) -> str:
         """
@@ -54,7 +54,7 @@ class Generator(ABC):
         pass
 
     @abstractmethod
-    def set_model(self, model: str) -> None:
+    async def set_model(self, model: str) -> None:
         """
         Sets the specific model to use for generation.
 
@@ -67,7 +67,7 @@ class Generator(ABC):
         pass
 
     @abstractmethod
-    def set_default_options(self, options: Dict[str, Any]) -> None:
+    async def set_default_options(self, options: Dict[str, Any]) -> None:
         """
         Sets default options for all generation requests.
 
@@ -80,7 +80,7 @@ class Generator(ABC):
         pass
 
     @abstractmethod
-    def healthcheck(self) -> Dict[str, Any]:
+    async def healthcheck(self) -> Dict[str, Any]:
         """
         Checks if the generator is properly configured and can connect to the language model.
 

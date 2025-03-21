@@ -1,54 +1,97 @@
-# ICI Framework - Configuration File
-# Copy this file to config.yaml and update with your credentials
-
-# Ingestors Configuration
-ingestors:
-  # Telegram Ingestor
-  telegram:
-    # API credentials from https://my.telegram.org
-    api_id: "YOUR_API_ID"  # Replace with your API ID (as a string)
-    api_hash: "YOUR_API_HASH"  # Replace with your API hash
-    phone_number: "+1234567890"  # Replace with your phone number including country code
-    session_string: ""  # This will be auto-generated on first run if left empty
-    request_delay: 1.0  # Delay between API requests in seconds
-
-# Preprocessor Configuration
-preprocessors:
-  telegram:
-    # Message chunking settings
-    chunk_size: 1000  # Maximum characters per chunk
-    chunk_overlap: 100  # Character overlap between chunks
-    group_by_conversation: true  # Whether to group messages by conversation
-    minimum_message_length: 10  # Skip messages shorter than this
-    include_metadata: true  # Include message metadata in the output
-
-# Embedder Configuration
 embedders:
   sentence_transformer:
-    model_name: "all-MiniLM-L6-v2"  # Default model
-    device: "auto"  # "auto", "cpu", "cuda", or "mps"
-    batch_size: 32  # Batch size for processing
-    normalize: true  # Whether to normalize embeddings
-
-# Vector Store Configuration
-vector_stores:
-  chroma:
-    persist_directory: "data/chroma"  # Directory to store the database
-    collection_name: "messages"  # Default collection name
-    embedding_function: "sentence_transformer"  # Name of the embedder to use
-    distance_metric: "cosine"  # Distance metric for similarity searches
-    
-# Pipeline Configuration
+    batch_size: 32
+    device: cuda
+    model_name: all-MiniLM-L6-v2
+ingestors:
+  telegram:
+    api_hash: "YOUR_TELEGRAM_API_HASH"
+    api_id: "YOUR_TELEGRAM_API_ID"
+    phone_number: "+1234567890"
+    request_delay: 0.5
+    session_string: "YOUR_TELEGRAM_SESSION_STRING"
 pipelines:
   telegram:
-    batch_size: 100  # Number of items to process in each batch
-    schedule_interval_minutes: 60  # For scheduled runs, how often to check for new data
-    state_db_path: "data/state/telegram_pipeline.db"  # Path to SQLite state database
-    incremental: true  # Whether to perform incremental updates by default
-    
-# Logging Configuration
-logging:
-  level: "INFO"  # DEBUG, INFO, WARNING, ERROR, CRITICAL
-  format: "structured"  # structured or text
-  output: "console"  # console or file
-  file_path: "logs/ici.log"  # Only used if output is file 
+    batch_size: 100
+    schedule:
+      interval_minutes: 1
+preprocessors:
+  telegram:
+    chunk_size: 512
+    include_overlap: true
+    max_messages_per_chunk: 10
+    time_window_minutes: 15
+state_manager:
+  db_path: ingestor_state.db
+vector_stores:
+  chroma:
+    collection_name: telegram_messages
+    embedding_function: sentence_transformer
+    persist_directory: ./chroma_db
+loggers:
+  structured_logger:
+    name: structured_logger
+    level: DEBUG
+    log_file: ./logs/structured_logger.log
+    console_output: true
+    user_betterstack: true
+    source_token: "YOUR_SOURCE_TOKEN"
+    host: "YOUR_INGESTION_HOST"
+
+# Component configurations
+validator:
+  # Simplified validator that only checks if input is from COMMAND_LINE source
+  allowed_sources: ["COMMAND_LINE"]
+  rules: []
+  
+prompt_builder:
+  template: "Context:\n{context}\n\nQuestion: {question}"
+  fallback_template: "Answer based on general knowledge: {question}"
+  error_template: "Unable to process: {error}"
+
+# Generator configuration with support for different types
+generator:
+  # Use "openai" for direct OpenAI API or "langchain" for LangChain integration
+  type: "langchain"
+  
+  # For LangChain type
+  provider: "openai"  # Options: "openai", "anthropic", etc.
+  chain_type: "simple"
+  memory:
+    type: "buffer"
+    k: 5
+  
+  # Common settings
+  model: "gpt-4o"
+  api_key: "YOUR_API_KEY"
+  default_options:
+    temperature: 0.7
+    max_tokens: 1024
+    top_p: 1.0
+    frequency_penalty: 0.0
+    presence_penalty: 0.0
+  max_retries: 3
+  base_retry_delay: 1
+
+orchestrator:
+  num_results: 5
+  similarity_threshold: 0.7
+  rules_source: "config"
+  pipeline:
+    auto_start: true
+    ingestor_id: "telegram"
+  error_messages:
+    validation_failed: "I'm unable to process your request due to security restrictions."
+    no_documents: "I don't have specific information on that topic yet."
+    generation_failed: "I'm having trouble generating a response right now. Please try again later."
+  validation_rules:
+    default: []  # Empty default rules - only checks if source is COMMAND_LINE
+    # Can add user-specific rules here if needed:
+    # user123: [{...}]
+  user_context:
+    default: {"permission_level": "user"}
+    # Can add user-specific context here:
+    # admin_user: {"permission_level": "admin"}
+  generation_options:
+    temperature: 0.7
+    max_tokens: 1024

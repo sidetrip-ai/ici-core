@@ -14,8 +14,8 @@ from typing import Dict, Any, List, Optional
 from datetime import datetime, timezone
 import logging
 
-from apscheduler.schedulers.background import BackgroundScheduler
-from apscheduler.triggers.interval import IntervalTrigger
+# from apscheduler.schedulers.background import BackgroundScheduler
+# from apscheduler.triggers.interval import IntervalTrigger
 import asyncio
 
 from ici.core.interfaces.pipeline import IngestionPipeline
