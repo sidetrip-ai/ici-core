@@ -15,6 +15,7 @@ from langchain.chains.conversation.memory import ConversationBufferMemory
 from langchain.prompts import PromptTemplate
 from langchain.schema.language_model import BaseLanguageModel
 from langchain_openai import ChatOpenAI
+from langchain_community.llms import Ollama
 from langchain.schema.output import LLMResult, Generation
 
 from ici.core.interfaces.generator import Generator
@@ -61,15 +62,15 @@ class LangchainGenerator(Generator):
         self._memory = None
         self._prompt_template = None
     
-    def _get_api_key(self):
+    def _get_credentials(self):
         """
-        Securely fetch API key when needed instead of storing it as an instance variable.
+        Securely fetch credentials (API keys or URLs) when needed instead of storing as instance variables.
         
         Returns:
-            str: The API key for the configured provider
+            str: The credentials for the configured provider
             
         Raises:
-            ValueError: If API key is not found
+            ValueError: If required credentials are not found
         """
         generator_config = get_component_config("generator", self._config_path)
         
@@ -91,6 +92,10 @@ class LangchainGenerator(Generator):
                 raise ValueError("Anthropic API key not found in config or environment")
                 
             return api_key
+        elif self._provider == "ollama":
+            # For Ollama, we return the base_url instead of an API key
+            base_url = generator_config.get("base_url", "http://localhost:11434")
+            return base_url
         else:
             raise ValueError(f"Unsupported provider: {self._provider}")
             
@@ -118,8 +123,8 @@ class LangchainGenerator(Generator):
             # Extract provider type
             self._provider = generator_config.get("provider", self._provider)
             
-            # Get API key to verify it exists (but don't store it)
-            api_key = self._get_api_key()
+            # Get credentials to verify they exist (but don't store them)
+            credentials = self._get_credentials()
             
             # Extract model with default
             self._model = generator_config.get("model", self._model)
@@ -148,7 +153,16 @@ class LangchainGenerator(Generator):
                     temperature=self._default_options.get("temperature", 0.7),
                     max_tokens=self._default_options.get("max_tokens", 1024),
                     top_p=self._default_options.get("top_p", 1.0),
-                    api_key=api_key  # Use API key but don't store it as instance variable
+                    api_key=credentials  # Use API key but don't store it as instance variable
+                )
+            elif self._provider == "ollama":
+                self._llm = Ollama(
+                    model=self._model,
+                    base_url=credentials,  # Use base_url from credentials
+                    temperature=self._default_options.get("temperature", 0.7),
+                    # Add other Ollama-specific parameters as needed
+                    num_predict=self._default_options.get("max_tokens", 1024),
+                    top_p=self._default_options.get("top_p", 1.0),
                 )
             # Add additional providers here as elif blocks
             
@@ -237,24 +251,31 @@ class LangchainGenerator(Generator):
                         # Create new LLM instance with updated parameters
                         temp_llm = None
                         if self._provider == "openai":
-                            # Get API key securely when needed
-                            api_key = self._get_api_key()
+                            # Get credentials securely when needed
+                            credentials = self._get_credentials()
                             temp_llm = ChatOpenAI(
                                 model_name=self._model,
                                 temperature=options.get("temperature", self._default_options.get("temperature")),
                                 max_tokens=options.get("max_tokens", self._default_options.get("max_tokens")),
                                 top_p=options.get("top_p", self._default_options.get("top_p")),
-                                api_key=api_key  # Use freshly retrieved API key
+                                api_key=credentials  # Use freshly retrieved credentials
+                            )
+                        elif self._provider == "ollama":
+                            # Get credentials (base_url) securely when needed
+                            credentials = self._get_credentials()
+                            temp_llm = Ollama(
+                                model=self._model,
+                                base_url=credentials,
+                                temperature=options.get("temperature", self._default_options.get("temperature")),
+                                num_predict=options.get("max_tokens", self._default_options.get("max_tokens")),
+                                top_p=options.get("top_p", self._default_options.get("top_p")),
                             )
                         
-                            # Use the temporary LLM for this request if created
-                            if temp_llm:
-                                chain = LLMChain(llm=temp_llm, prompt=self._prompt_template)
-                                response = await asyncio.to_thread(chain.run, prompt=prompt)
-                            else:
-                                response = await asyncio.to_thread(self._chain.run, prompt=prompt)
+                        # Use the temporary LLM for this request if created
+                        if temp_llm:
+                            chain = LLMChain(llm=temp_llm, prompt=self._prompt_template)
+                            response = await asyncio.to_thread(chain.run, prompt=prompt)
                         else:
-                            # Use the default chain
                             response = await asyncio.to_thread(self._chain.run, prompt=prompt)
                     else:
                         # Use the default chain
@@ -322,7 +343,7 @@ class LangchainGenerator(Generator):
         Sets the specific model to use for generation.
 
         Args:
-            model: The model identifier (e.g., 'gpt-4o', 'claude-3-opus')
+            model: The model identifier (e.g., 'gpt-4o', 'claude-3-opus', 'llama3')
 
         Raises:
             GenerationError: If the model is invalid or unavailable
@@ -340,14 +361,24 @@ class LangchainGenerator(Generator):
             
             # Re-initialize the LLM with the new model
             if self._provider == "openai":
-                # Get API key securely when needed
-                api_key = self._get_api_key()
+                # Get credentials securely when needed
+                credentials = self._get_credentials()
                 self._llm = ChatOpenAI(
                     model_name=self._model,
                     temperature=self._default_options.get("temperature", 0.7),
                     max_tokens=self._default_options.get("max_tokens", 1024),
                     top_p=self._default_options.get("top_p", 1.0),
-                    api_key=api_key  # Use freshly retrieved API key
+                    api_key=credentials  # Use freshly retrieved credentials
+                )
+            elif self._provider == "ollama":
+                # Get credentials (base_url) securely when needed
+                credentials = self._get_credentials()
+                self._llm = Ollama(
+                    model=self._model,
+                    base_url=credentials,
+                    temperature=self._default_options.get("temperature", 0.7),
+                    num_predict=self._default_options.get("max_tokens", 1024),
+                    top_p=self._default_options.get("top_p", 1.0),
                 )
             # Add additional providers here as elif blocks
             
@@ -414,14 +445,24 @@ class LangchainGenerator(Generator):
             
             # Update the LLM with new default options
             if self._provider == "openai":
-                # Get API key securely when needed
-                api_key = self._get_api_key()
+                # Get credentials securely when needed
+                credentials = self._get_credentials()
                 self._llm = ChatOpenAI(
                     model_name=self._model,
                     temperature=self._default_options.get("temperature", 0.7),
                     max_tokens=self._default_options.get("max_tokens", 1024),
                     top_p=self._default_options.get("top_p", 1.0),
-                    api_key=api_key  # Use freshly retrieved API key
+                    api_key=credentials  # Use freshly retrieved credentials
+                )
+            elif self._provider == "ollama":
+                # Get credentials (base_url) securely when needed
+                credentials = self._get_credentials()
+                self._llm = Ollama(
+                    model=self._model,
+                    base_url=credentials,
+                    temperature=self._default_options.get("temperature", 0.7),
+                    num_predict=self._default_options.get("max_tokens", 1024),
+                    top_p=self._default_options.get("top_p", 1.0),
                 )
             # Add additional providers here as elif blocks
             

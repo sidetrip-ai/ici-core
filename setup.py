@@ -18,18 +18,16 @@ setup(
         "telethon>=1.39.0",  # For Telegram API access
         "logtail-python>=0.3.3",
         "openai>=1.68.0",
-        "langchain>=0.3.21",  # For LangChain integration
-        "langchain-openai>=0.1.0",  # For OpenAI with LangChain
+        "langchain>=0.3.21",  # Core LangChain functionality
+        "langchain-openai>=0.1.0",  # For OpenAI integration
+        "langchain-community>=0.3.20",  # For additional model providers (including Ollama)
+        "langchain-anthropic>=0.3.10",  # For Claude models
     ],
     extras_require={
         "dev": [
             "pytest>=7.0.0",   # For testing
             "pytest-cov>=4.0.0", # For test coverage
             "black>=23.0.0",   # For code formatting
-        ],
-        "extra_llms": [
-            "langchain-anthropic>=0.1.0",  # For Claude models
-            "langchain-community>=0.0.13",  # For additional providers
         ]
     },
 )

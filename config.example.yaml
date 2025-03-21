@@ -51,25 +51,39 @@ prompt_builder:
 
 # Generator configuration with support for different types
 generator:
-  # Use "openai" for direct OpenAI API or "langchain" for LangChain integration
+  # Common generator configurations
+  
+  # Provider type: "openai", "langchain", etc
   type: "langchain"
   
-  # For LangChain type
-  provider: "openai"  # Options: "openai", "anthropic", etc.
+  # LangChain provider configurations (when type is "langchain")
+  
+  # Option 1: OpenAI via LangChain
+  provider: "openai"
+  model: "gpt-4o"
+  api_key: "YOUR_OPENAI_API_KEY"
+  
+  # Option 2: Ollama via LangChain
+  # Uncomment to use Ollama
+  # provider: "ollama"
+  # model: "llama3"  # Or another model you have in Ollama
+  # base_url: "http://localhost:11434"  # Default Ollama URL
+  
+  # Chain and memory configuration
   chain_type: "simple"
   memory:
     type: "buffer"
     k: 5
-  
-  # Common settings
-  model: "gpt-4o"
-  api_key: "YOUR_API_KEY"
+    
+  # Common generation options
   default_options:
     temperature: 0.7
     max_tokens: 1024
     top_p: 1.0
     frequency_penalty: 0.0
     presence_penalty: 0.0
+  
+  # Retry configuration
   max_retries: 3
   base_retry_delay: 1
 
