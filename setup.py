@@ -22,6 +22,8 @@ setup(
         "langchain-openai>=0.1.0",  # For OpenAI integration
         "langchain-community>=0.3.20",  # For additional model providers (including Ollama)
         "langchain-anthropic>=0.3.10",  # For Claude models
+        "langchain-ollama>=0.3.0",
+        "python-dotenv>=1.0.1"
     ],
     extras_require={
         "dev": [

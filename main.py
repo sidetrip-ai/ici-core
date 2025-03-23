@@ -18,10 +18,13 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 if current_dir not in sys.path:
     sys.path.insert(0, current_dir)
 
-# Set default environment variables if not already set
-# os.environ.setdefault("OPENAI_API_KEY", "dummy-api-key")
-# os.environ.setdefault("SOURCE_TOKEN", "dummy-source-token")
-# os.environ.setdefault("INGESTION_HOST", "localhost")
+# Load environment variables from .env file
+try:
+    from ici.utils.load_env import load_env
+    load_env()
+    print("Environment variables loaded successfully")
+except ImportError as e:
+    print(f"Warning: Could not load environment variables: {e}")
 
 print(f"Python path: {sys.path}")
 print(f"Current directory: {os.getcwd()}")

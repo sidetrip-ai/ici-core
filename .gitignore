@@ -55,3 +55,10 @@ ici-env/
 # Project specific
 examples/logs/
 logs/
+
+# DB
+db/
+
+# Logs
+**.log
+logs/

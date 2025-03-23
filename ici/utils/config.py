@@ -5,10 +5,44 @@ This module provides functions for loading and accessing configuration from YAML
 """
 
 import os
+import re
 import yaml
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, Union
 
 from ici.core.exceptions import ConfigurationError
+
+
+def _process_env_vars(value: Any) -> Any:
+    """
+    Process a configuration value to replace environment variable references.
+    
+    Replaces any string containing $ENV_VAR or ${ENV_VAR} with the corresponding
+    environment variable value.
+    
+    Args:
+        value: The configuration value to process
+        
+    Returns:
+        The processed value with environment variables substituted
+    """
+    if isinstance(value, str):
+        # Pattern to match ${VAR} and $VAR formats
+        pattern = r"\${([a-zA-Z0-9_]+)}|\$([a-zA-Z0-9_]+)"
+        
+        def replace_env_var(match):
+            env_var = match.group(1) or match.group(2)
+            env_value = os.environ.get(env_var)
+            if env_value is None:
+                return match.group(0)  # Keep original if not found
+            return env_value
+            
+        return re.sub(pattern, replace_env_var, value)
+    elif isinstance(value, dict):
+        return {k: _process_env_vars(v) for k, v in value.items()}
+    elif isinstance(value, list):
+        return [_process_env_vars(item) for item in value]
+    else:
+        return value
 
 
 def load_config(config_path: Optional[str] = None) -> Dict[str, Any]:
@@ -20,7 +54,7 @@ def load_config(config_path: Optional[str] = None) -> Dict[str, Any]:
                     variable ICI_CONFIG_PATH or defaults to 'config.yaml'
                     
     Returns:
-        Dict[str, Any]: The loaded configuration
+        Dict[str, Any]: The loaded configuration with environment variables processed
         
     Raises:
         ConfigurationError: If the configuration file cannot be loaded
@@ -41,6 +75,9 @@ def load_config(config_path: Optional[str] = None) -> Dict[str, Any]:
         # Ensure config is a dictionary
         if not isinstance(config, dict):
             raise ValueError(f"Invalid configuration format: expected dictionary, got {type(config)}")
+        
+        # Process environment variables in the configuration
+        config = _process_env_vars(config)
             
         return config
         
@@ -78,11 +115,14 @@ def get_component_config(component_name: str, config_path: Optional[str] = None)
 
         component_config = config
 
-        print({
-            "action": "CONFIG_LOADED",
-            "message": "Configuration loaded successfully",
-            "data": {"config": component_config}
-        })
+        # Only print if console output is enabled in logger configuration
+        console_output_enabled = config.get("loggers", {}).get("structured_logger", {}).get("console_output", True)
+        if console_output_enabled:
+            print({
+                "action": "CONFIG_LOADED",
+                "message": "Configuration loaded successfully",
+                "data": {"config": component_config}
+            })
 
         for component in components:
             component_config = component_config.get(component, {})

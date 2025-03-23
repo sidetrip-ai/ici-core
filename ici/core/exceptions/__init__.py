@@ -117,6 +117,12 @@ class LoggerError(ICIError):
     pass
 
 
+class ComponentLoadError(ICIError):
+    """Raised when a component cannot be loaded."""
+
+    pass
+
+
 # Exporting all exception types
 __all__ = [
     "ICIError",
@@ -136,4 +142,5 @@ __all__ = [
     "OrchestratorError",
     "ConfigurationError",
     "LoggerError",
+    "ComponentLoadError"
 ]

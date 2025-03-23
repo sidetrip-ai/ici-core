@@ -17,6 +17,7 @@ from logtail import LogtailHandler
 
 from ici.core.interfaces import Logger
 from ici.core.exceptions import LoggerError
+from ici.utils.config import get_component_config
 
 
 class StructuredLogger(Logger):
@@ -67,50 +68,21 @@ class StructuredLogger(Logger):
             log_file: Optional path to log file
             console_output: Whether to output logs to console
         """
-        try:
-            # Create logger
-            handler = LogtailHandler(
-                source_token='$SOURCE_TOKEN', 
-                host='https://$INGESTING_HOST',
-            )
-            self.logger = logging.getLogger(name)
-            self.logger.setLevel(self._LEVEL_MAP.get(level.upper(), logging.WARNING))
-
-            # Clear existing handlers
-            self.logger.handlers = []
-            # self.logger.addHandler(handler)
-
-            # Create formatter with minimal formatting since we'll format in the log methods
-            formatter = logging.Formatter("%(message)s")
-
-            # Add console handler if requested
-            if console_output:
-                console_handler = logging.StreamHandler(sys.stdout)
-                console_handler.setFormatter(formatter)
-                self.logger.addHandler(console_handler)
-
-            # Add file handler if log_file is provided
-            if log_file:
-                # Create directory if it doesn't exist
-                os.makedirs(os.path.dirname(os.path.abspath(log_file)), exist_ok=True)
-                file_handler = logging.FileHandler(log_file)
-                file_handler.setFormatter(formatter)
-                self.logger.addHandler(file_handler)
-
-            self.name = name
-
-        except Exception as e:
-            error_msg = f"Failed to initialize logger: {str(e)}"
-            print(error_msg, file=sys.stderr)
-            raise LoggerError(error_msg) from e
+        self.name = name
+        self.level = level
+        self.log_file = log_file
+        self.console_output = console_output
+        self._config_path = os.environ.get("ICI_CONFIG_PATH", "config.yaml")
+        self._is_initialized = False
+        
+        self.initialize()
     
-    async def initialize(self) -> None:
+    def initialize(self) -> None:
         """
         Initialize the logger with configuration parameters.
         
-        This method is implemented to satisfy the Logger interface requirements.
-        For StructuredLogger, most initialization happens in the constructor,
-        so this method serves as a hook for any async initialization steps.
+        This method loads logger configuration from config.yaml and reconfigures
+        the logger accordingly.
         
         Returns:
             None
@@ -119,14 +91,68 @@ class StructuredLogger(Logger):
             LoggerError: If initialization fails for any reason.
         """
         try:
+            # Load logger configuration
+            logger_config = get_component_config("loggers.structured_logger", self._config_path) or {}
+            
+            # Get configuration values with defaults from constructor
+            self.level = logger_config.get("level", self.level)
+            self.log_file = logger_config.get("log_file", self.log_file)
+            self.console_output = logger_config.get("console_output", self.console_output)
+            
+            # Special handling for betterstack integration
+            self.use_betterstack = logger_config.get("use_betterstack", False)
+            self.source_token = os.environ.get("SOURCE_TOKEN", logger_config.get("source_token", ""))
+            self.host = os.environ.get("INGESTION_HOST", logger_config.get("host", ""))
+            
+            # Reconfigure the logger
+            self.logger = logging.getLogger(self.name)
+            self.logger.setLevel(self._LEVEL_MAP.get(self.level.upper(), logging.INFO))
+            
+            # Clear existing handlers
+            self.logger.handlers = []
+            
+            # Create formatter with minimal formatting since we'll format in the log methods
+            formatter = logging.Formatter("%(message)s")
+            
+            # Add betterstack handler if configured
+            if self.use_betterstack and self.source_token and self.host:
+                try:
+                    handler = LogtailHandler(
+                        source_token=self.source_token,
+                        host=f"https://{self.host}",
+                    )
+                    self.logger.addHandler(handler)
+                except Exception as e:
+                    print(f"Failed to initialize Betterstack logger: {str(e)}", file=sys.stderr)
+            
+            # Add console handler if requested
+            if self.console_output:
+                console_handler = logging.StreamHandler(sys.stdout)
+                console_handler.setFormatter(formatter)
+                self.logger.addHandler(console_handler)
+            
+            # Add file handler if log_file is provided
+            if self.log_file:
+                # Create directory if it doesn't exist
+                os.makedirs(os.path.dirname(os.path.abspath(self.log_file)), exist_ok=True)
+                file_handler = logging.FileHandler(self.log_file)
+                file_handler.setFormatter(formatter)
+                self.logger.addHandler(file_handler)
+            
+            self._is_initialized = True
+            
             self.info({
                 "action": "LOGGER_INITIALIZE",
-                "message": f"Logger '{self.name}' initialized",
+                "message": f"Logger '{self.name}' initialized with configuration",
                 "data": {
                     "logger_type": "StructuredLogger",
-                    "log_level": self.logger.level
+                    "log_level": self.level,
+                    "console_output": self.console_output,
+                    "log_file": self.log_file,
+                    "use_betterstack": self.use_betterstack
                 }
             })
+            
             return None
         except Exception as e:
             error_msg = f"Failed to initialize logger: {str(e)}"

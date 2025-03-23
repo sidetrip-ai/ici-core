@@ -11,7 +11,7 @@ class Logger(ABC):
     """
 
     @abstractmethod
-    async def initialize(self) -> None:
+    def initialize(self) -> None:
         """
         Initialize the logger with configuration parameters.
         

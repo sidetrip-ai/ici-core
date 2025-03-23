@@ -6,8 +6,9 @@ This script demonstrates how to use the TelegramIngestionPipeline to ingest and 
 Telegram messages, transform them, generate embeddings, and store them in ChromaDB.
 
 Prerequisites:
-1. Set up config.yaml with Telegram API credentials
+1. Set up config.yaml with Telegram API credentials (or use environment variables)
 2. Ensure all dependencies are installed (pip install -r requirements.txt)
+3. Create a .env file from .env.example and fill in your credentials
 """
 
 import os
@@ -20,6 +21,14 @@ import yaml
 # Add the parent directory to sys.path to import from ici
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
+# Import environment variable loader
+try:
+    from ici.utils.load_env import load_env
+    # Load environment variables from .env file
+    load_env()
+except ImportError:
+    print("Warning: Environment variable loader not found. Environment variables may not be loaded.")
+
 from ici.adapters.pipelines import TelegramIngestionPipeline
 from ici.utils.config import get_component_config
 
@@ -30,7 +39,12 @@ async def main():
     parser.add_argument("--config", type=str, default="config.yaml", help="Path to config file")
     parser.add_argument("--ingestor-id", type=str, default="telegram_example", help="Ingestor ID")
     parser.add_argument("--full-run", action="store_true", help="Perform a full historical run")
+    parser.add_argument("--env-file", type=str, help="Path to .env file (default is .env)")
     args = parser.parse_args()
+    
+    # Try to load environment variables again if env-file is specified
+    if args.env_file and 'load_env' in locals():
+        load_env(args.env_file)
     
     # Set environment variable for config path
     os.environ["ICI_CONFIG_PATH"] = args.config
@@ -40,6 +54,7 @@ async def main():
         create_example_config(args.config)
         print(f"Created example config file at {args.config}")
         print("Please edit this file to add your Telegram API credentials before running again.")
+        print("Or set the appropriate environment variables in your .env file.")
         return
     
     print(f"Starting Telegram ingestion pipeline example with ingestor ID: {args.ingestor_id}")

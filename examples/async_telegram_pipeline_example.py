@@ -2,15 +2,13 @@
 """
 Async Telegram Ingestion Pipeline Example
 
-This script demonstrates how to use the TelegramIngestionPipeline asynchronously to ingest and process
-Telegram messages, transform them, generate embeddings, and store them in ChromaDB.
-
-This version handles the async nature of the TelegramIngestor methods when called from
-within an async context.
+This script demonstrates how to use an asynchronous Telegram ingestion pipeline
+that processes messages in real-time with customizable components.
 
 Prerequisites:
-1. Set up config.yaml with Telegram API credentials
+1. Set up config.yaml with Telegram API credentials (or use environment variables)
 2. Ensure all dependencies are installed (pip install -r requirements.txt)
+3. Create a .env file from .env.example and fill in your credentials
 """
 
 import os
@@ -25,6 +23,14 @@ from typing import Dict, Any
 # Add the parent directory to sys.path to import from ici
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
+# Import environment variable loader
+try:
+    from ici.utils.load_env import load_env
+    # Load environment variables from .env file
+    load_env()
+except ImportError:
+    print("Warning: Environment variable loader not found. Environment variables may not be loaded.")
+
 from ici.adapters.pipelines import TelegramIngestionPipeline
 from ici.utils.config import get_component_config, load_config
 from ici.adapters.ingestors.telegram import TelegramIngestor
@@ -33,7 +39,6 @@ from ici.adapters.embedders.sentence_transformer import SentenceTransformerEmbed
 from ici.adapters.vector_stores.chroma import ChromaDBStore
 from ici.utils.state_manager import StateManager
 from ici.adapters.loggers import StructuredLogger
-from ici.utils.config import load_config
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -436,8 +441,23 @@ class AsyncTelegramIngestionPipeline:
 
 
 async def main():
+    """Run the example async Telegram ingestion pipeline."""
+    parser = argparse.ArgumentParser(description="Async Telegram Ingestion Pipeline Example")
+    parser.add_argument("--config", type=str, default="../config.yaml", help="Path to config file")
+    parser.add_argument("--ingestor-id", type=str, default="telegram_example", help="Ingestor ID")
+    parser.add_argument("--env-file", type=str, help="Path to .env file (default is .env)")
+    args = parser.parse_args()
+    
+    # Try to load environment variables again if env-file is specified
+    if args.env_file and 'load_env' in globals():
+        load_env(args.env_file)
+    
     # Load configuration
-    config_path = os.path.join(os.path.dirname(__file__), "../config.yaml")
+    config_path = os.path.abspath(args.config)
+    if not os.path.exists(config_path):
+        logger.error(f"Config file not found: {config_path}")
+        return
+    
     config = load_config(config_path)
 
     # Initialize pipeline
@@ -458,7 +478,7 @@ async def main():
     
     # Run ingestion once
     try:
-        results = await pipeline.run_ingestion("telegram_example")
+        results = await pipeline.run_ingestion(args.ingestor_id)
         logger.info(f"Ingestion results: {results}")
     except Exception as e:
         logger.error(f"Error during ingestion: {e}")

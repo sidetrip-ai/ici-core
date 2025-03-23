@@ -14,6 +14,8 @@ from ici.utils.datetime_utils import (
     from_isoformat,
     safe_compare
 )
+from ici.utils.load_env import load_env
+from ici.utils.component_loader import load_component_class
 
 __all__ = [
     "get_component_config",
@@ -24,4 +26,6 @@ __all__ = [
     "from_timestamp",
     "from_isoformat",
     "safe_compare",
+    "load_env",
+    "load_component_class",
 ] 

@@ -90,3 +90,14 @@ class Embedder(ABC):
             EmbeddingError: If the health check itself encounters an error
         """
         pass
+
+    def arguments(self) -> Dict[str, Any]:
+        """
+        Get the arguments used to initialize this embedder.
+        
+        Returns:
+            Dict[str, Any]: Dictionary of initialization arguments
+        """
+        return {}
+
+        

@@ -15,7 +15,7 @@ from langchain.chains.conversation.memory import ConversationBufferMemory
 from langchain.prompts import PromptTemplate
 from langchain.schema.language_model import BaseLanguageModel
 from langchain_openai import ChatOpenAI
-from langchain_community.llms import Ollama
+from langchain_ollama import OllamaLLM
 from langchain.schema.output import LLMResult, Generation
 
 from ici.core.interfaces.generator import Generator
@@ -156,7 +156,7 @@ class LangchainGenerator(Generator):
                     api_key=credentials  # Use API key but don't store it as instance variable
                 )
             elif self._provider == "ollama":
-                self._llm = Ollama(
+                self._llm = OllamaLLM(
                     model=self._model,
                     base_url=credentials,  # Use base_url from credentials
                     temperature=self._default_options.get("temperature", 0.7),
@@ -263,7 +263,7 @@ class LangchainGenerator(Generator):
                         elif self._provider == "ollama":
                             # Get credentials (base_url) securely when needed
                             credentials = self._get_credentials()
-                            temp_llm = Ollama(
+                            temp_llm = OllamaLLM(
                                 model=self._model,
                                 base_url=credentials,
                                 temperature=options.get("temperature", self._default_options.get("temperature")),
@@ -373,7 +373,7 @@ class LangchainGenerator(Generator):
             elif self._provider == "ollama":
                 # Get credentials (base_url) securely when needed
                 credentials = self._get_credentials()
-                self._llm = Ollama(
+                self._llm = OllamaLLM(
                     model=self._model,
                     base_url=credentials,
                     temperature=self._default_options.get("temperature", 0.7),
@@ -457,7 +457,7 @@ class LangchainGenerator(Generator):
             elif self._provider == "ollama":
                 # Get credentials (base_url) securely when needed
                 credentials = self._get_credentials()
-                self._llm = Ollama(
+                self._llm = OllamaLLM(
                     model=self._model,
                     base_url=credentials,
                     temperature=self._default_options.get("temperature", 0.7),

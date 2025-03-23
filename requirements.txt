@@ -16,3 +16,4 @@ chromadb>=0.6.3               # For ChromaDB vector database
 numpy>=2.2.2                  # Required for vector operations
 logtail-python>=0.3.3
 openai>=1.68.0
+langchain-ollama>=0.3.0
