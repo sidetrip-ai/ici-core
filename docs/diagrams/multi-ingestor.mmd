@@ -1,0 +1,20 @@
+sequenceDiagram
+    participant IngestionPipeline
+    participant Database
+    participant Ingestor1
+    participant Ingestor2
+    participant Logger
+
+    loop Every Interval
+        IngestionPipeline->>Database: Retrieve last_timestamp for ingestor_id1
+        Database-->>IngestionPipeline: last_timestamp1
+        IngestionPipeline->>Ingestor1: fetch_new_data(since=last_timestamp1)
+        Ingestor1-->>IngestionPipeline: raw_data1
+        IngestionPipeline->>Logger: Log ingestion for ingestor_id1
+
+        IngestionPipeline->>Database: Retrieve last_timestamp for ingestor_id2
+        Database-->>IngestionPipeline: last_timestamp2
+        IngestionPipeline->>Ingestor2: fetch_new_data(since=last_timestamp2)
+        Ingestor2-->>IngestionPipeline: raw_data2
+        IngestionPipeline->>Logger: Log ingestion for ingestor_id2
+    end

@@ -1,0 +1,18 @@
+sequenceDiagram
+    participant IngestionPipeline
+    participant Ingestor
+    participant Logger
+
+    loop Retry up to 3 times
+        IngestionPipeline->>Ingestor: fetch_new_data(since=last_timestamp)
+        alt Fetch succeeds
+            Ingestor-->>IngestionPipeline: raw_data
+            IngestionPipeline->>Logger: Log successful fetch
+        else Fetch fails
+            Ingestor-->>IngestionPipeline: IngestorError
+            IngestionPipeline->>Logger: Log error and retry
+        end
+    end
+    alt Max retries exceeded
+        IngestionPipeline->>Logger: Log critical error, skip cycle
+    end

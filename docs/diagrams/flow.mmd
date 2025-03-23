@@ -1,0 +1,28 @@
+graph TD
+    Start --> InitializeSystem
+    InitializeSystem --> LoadConfig
+    LoadConfig --> CreateDatabaseConnection
+    CreateDatabaseConnection --> InitializeLogger
+    InitializeLogger --> InitializeComponents
+    InitializeComponents --> StartIngestionPipeline
+    StartIngestionPipeline --> IngestionLoop
+    IngestionLoop --> FetchData
+    FetchData --> ProcessData
+    ProcessData --> EmbedData
+    EmbedData --> StoreData
+    StoreData --> UpdateState
+    UpdateState --> LogIngestion
+    LogIngestion --> WaitForNextCycle
+
+    InitializeComponents --> ReadyForQueries
+    ReadyForQueries --> ReceiveQuery
+    ReceiveQuery --> ValidateQuery
+    ValidateQuery --> EmbedQuery
+    EmbedQuery --> RetrieveDocuments
+    RetrieveDocuments --> BuildPrompt
+    BuildPrompt --> GenerateResponse
+    GenerateResponse --> ReturnResponse
+    ReturnResponse --> LogQuery
+
+    WaitForNextCycle --> IngestionLoop
+    LogQuery --> ReceiveQuery
