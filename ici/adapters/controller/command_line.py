@@ -26,9 +26,6 @@ try:
 except ImportError as e:
     print(f"Warning: Could not load environment variables: {e}")
 
-print(f"Python path: {sys.path}")
-print(f"Current directory: {os.getcwd()}")
-
 try:
     from ici.adapters.orchestrators.telegram_orchestrator import TelegramOrchestrator
     print("Successfully imported TelegramOrchestrator")

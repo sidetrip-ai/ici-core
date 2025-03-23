@@ -117,7 +117,9 @@ class TelegramOrchestrator(Orchestrator):
             
             if auto_start and self._pipeline:
                 try:
+                    print("Fetching recent 100 messages from telegram...")
                     await self._pipeline.start()
+                    print("Pipeline stored data successfully")
                     self.logger.info({
                         "action": "ORCHESTRATOR_PIPELINE_STARTED",
                         "message": "Pipeline started successfully"
@@ -193,6 +195,7 @@ class TelegramOrchestrator(Orchestrator):
                 raise e
             
             # Initialize ingestion pipeline
+            print("Initializing ingestion pipeline...")
             self._pipeline = TelegramIngestionPipeline(logger_name="orchestrator.pipeline")
             await self._pipeline.initialize()
             

@@ -3,8 +3,12 @@ import sys
 import traceback
 
 from ici.adapters.controller import command_line_controller
+from ici.utils import print_banner
 
 if __name__ == "__main__":
+    # Print ASCII banner
+    print_banner()
+    
     # Run the main function
     try:
         print("Starting main function...")

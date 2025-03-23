@@ -16,6 +16,7 @@ from ici.utils.datetime_utils import (
 )
 from ici.utils.load_env import load_env
 from ici.utils.component_loader import load_component_class
+from ici.utils.print_banner import print_banner
 
 __all__ = [
     "get_component_config",
@@ -28,4 +29,5 @@ __all__ = [
     "safe_compare",
     "load_env",
     "load_component_class",
+    "print_banner",
 ] 

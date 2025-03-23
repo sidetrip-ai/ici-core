@@ -2,320 +2,210 @@
 
 A modular framework for creating a personal AI assistant that is context-aware, style-aware, personality-aware, and security-aware. The system processes data through an Ingestion Pipeline and responds to queries via a Query Pipeline, leveraging vector databases for efficient retrieval.
 
-## Features
+## 1. Introduction
 
-- Modular architecture with well-defined interfaces
-- Separation of concerns between ingestion and query pipelines
-- Extensible design supporting multiple data sources and AI models
-- Structured logging for better debugging and monitoring
-- Security-first approach with input validation
+ICI Core is an extensible framework designed to create AI assistants that are:
 
-## Quick Start
+- **Context-aware**: Uses vector databases to retrieve relevant information
+- **Style-aware**: Adapts response style based on configuration
+- **Personality-aware**: Customizable through prompt templates
+- **Security-aware**: Validates all user input against configurable security rules
+
+The system is architecturally divided into two primary pipelines:
+- **Ingestion Pipeline**: Processes and stores data from various sources (Telegram, Twitter, YouTube, etc.)
+- **Query Pipeline**: Handles user interactions, retrieves relevant context, and generates responses
+
+Key features include:
+- Modular components with well-defined interfaces
+- Support for multiple data sources
+- Flexible model selection (OpenAI, Anthropic, Ollama, etc.)
+- Configurable vector storage backends
+- Comprehensive logging and error handling
+
+## 2. How to Use
+
+Simple command to get started:
+```
+bash setup.sh && cp .env.example .env
+```
 
 ### Installation
 
-The simplest way to install ICI Core is using pip:
+#### Prerequisites
+- Python 3.8 or higher
+- pip package manager
+- Git (if cloning the repository)
+
+#### Setup Scripts
+
+We provide two setup scripts to help you get started quickly:
+
+- `setup.sh` for macOS/Linux users
+
+These scripts will:
+1. Check if a virtual environment is active
+2. Create and activate a virtual environment if needed
+3. Install all required dependencies from `requirements.txt`
 
 ```bash
-# Create a virtual environment (recommended)
-python -m venv ici-env
-source ici-env/bin/activate  # Linux/macOS
-# OR
-ici-env\Scripts\activate     # Windows
-
-# Install from the repository
-pip install -e .
+# For macOS/Linux
+chmod +x setup.sh
+./setup.sh
 ```
 
-For development:
+Alternatively, you can set up manually:
 
 ```bash
-# Install development dependencies
-pip install -e ".[dev]"
+# Create virtual environment
+python -m venv venv
+
+# Activate virtual environment
+# On macOS/Linux:
+source venv/bin/activate
+# On Windows:
+venv\Scripts\activate
+
+# Install dependencies
+pip install -r requirements.txt
 ```
 
-For specific components:
+### Configuration
+
+#### Environment Variables
+
+Copy the `.env.example` file to `.env` and update the values:
 
 ```bash
-# For embeddings support
-pip install -e ".[embeddings]"
-
-# For vector store support
-pip install -e ".[vector-stores]"
-
-# For all components
-pip install -e ".[dev,embeddings,vector-stores]"
+cp .env.example .env
 ```
 
-### Basic Usage
+Then edit the `.env` file with your credentials:
 
-Here's how to use the structured logger:
+1. **Telegram API Credentials** (required for Telegram ingestion):
+   - `TELEGRAM_API_ID`: Your Telegram API ID
+   - `TELEGRAM_API_HASH`: Your Telegram API hash
+   - `TELEGRAM_PHONE_NUMBER`: Your phone number with country code
+   - `TELEGRAM_SESSION_STRING`: Your Telegram session string
 
-```python
-from ici.adapters.loggers import StructuredLogger
+2. **Generator API Key** (required for OpenAI/Anthropic models):
+   - `GENERATOR_API_KEY`: Your OpenAI/Anthropic API key
 
-# Initialize logger
-logger = StructuredLogger(
-    name="my_component", 
-    level="INFO",
-    log_file="logs/app.log"
-)
+#### Getting Telegram API Credentials
 
-# Log events with structured data
-logger.info({
-    "action": "APP_START",
-    "message": "Application started successfully",
-    "data": {
-        "version": "0.1.0",
-        "environment": "development"
-    }
-})
+1. Visit https://my.telegram.org/apps
+2. Log in with your phone number
+3. Create a new application
+4. Note your API ID and API hash
+5. The session string will automatically be generated on first run.
+
+#### Getting OpenAI API Key
+
+1. Visit https://platform.openai.com/
+2. Sign up or log in to your account
+3. Navigate to API keys section
+4. Create a new secret key
+5. Copy the key (it won't be shown again)
+
+### Running the Application
+
+Once configured, run the application using:
+
+```bash
+python main.py
 ```
 
-## Project Structure
+## 3. How to Change AI Model
 
-```
-ici-core/
-├── ici/                      # Main package
-│   ├── core/                 # Core domain logic
-│   │   ├── interfaces/       # Interfaces defining the architecture
-│   │   └── exceptions/       # Exception definitions
-│   └── adapters/             # Implementations of interfaces
-│       └── loggers/          # Logger implementations
-├── examples/                 # Example scripts
-├── tests/                    # Tests
-├── requirements.txt          # Project dependencies
-├── setup.py                  # Package installation script
-└── README.md                 # Project documentation
-```
+### Configuring the Model in config.yaml
 
-## Development
-
-To contribute to this project:
-
-1. Clone the repository
-2. Install development dependencies: `pip install -e ".[dev]"`
-3. Run the tests: `pytest`
-4. Format code: `black ici tests examples`
-
-## License
-
-[MIT License](LICENSE)
-
-## Telegram Ingestor
-
-The ICI framework includes a Telegram ingestor that can extract direct messages from your Telegram account using the MTProto API. This allows you to analyze your personal message history.
-
-### Setup
-
-To use the Telegram ingestor, you need to:
-
-1. **Create a Telegram API application**:
-   - Go to https://my.telegram.org/apps
-   - Log in with your phone number
-   - Create a new application to get your API ID and API hash
-
-2. **Install the required dependencies**:
-   ```bash
-   pip install -e ".[telegram]"
-   ```
-
-3. **Configure the ingestor**:
-
-   Create a `config.yaml` file with your Telegram credentials:
-   ```yaml
-   telegram:
-     api_id: "YOUR_API_ID"
-     api_hash: "YOUR_API_HASH"
-     phone_number: "+12345678901"  # Include country code
-     # Use either session_file or session_string
-     session_file: "telegram_session"  # Option 1: Path to session file
-     # session_string: "1BQANOTEuMTA4LjU..."  # Option 2: Session string 
-     request_delay: 0.5  # Delay between requests to avoid rate limiting
-   ```
-
-4. **Authentication Options**:
-   - **Session File**: Traditional method that stores session data in a local file
-   - **Session String**: Portable string-based authentication that can be securely stored and transferred between environments without file access
-
-5. **Usage example**:
-   ```python
-   import asyncio
-   from ici.adapters.ingestors.telegram import TelegramIngestor
-   from datetime import datetime, timedelta
-   
-   async def main():
-       # Initialize using config.yaml
-       ingestor = TelegramIngestor()
-       await ingestor.initialize()  # Loads config from config.yaml
-       
-       # Check if connected successfully
-       health = ingestor.healthcheck()
-       if health["healthy"]:
-           # Fetch all direct message conversations
-           data = ingestor.fetch_full_data()
-           
-           # Or fetch messages from the last 7 days
-           since_date = datetime.now() - timedelta(days=7)
-           recent_data = ingestor.fetch_new_data(since=since_date)
-           
-           # Or fetch messages within a date range
-           start_date = datetime.now() - timedelta(days=30)
-           end_date = datetime.now() - timedelta(days=15)
-           range_data = ingestor.fetch_data_in_range(start=start_date, end=end_date)
-           
-           print(f"Retrieved {len(recent_data['messages'])} messages from {len(recent_data['conversations'])} conversations")
-   
-   # Run the async function
-   asyncio.run(main())
-   ```
-
-### Generating a Session String
-
-You can generate a session string from an existing session file:
-
-```python
-from telethon.sessions import StringSession
-from telethon.sync import TelegramClient
-
-with TelegramClient("your_session_file", api_id, api_hash) as client:
-    print(StringSession.save(client.session))
-```
-
-### Security Notes
-
-- The API credentials give access to your Telegram account, so keep them secure
-- Both session files and session strings store your authentication token - protect them like passwords
-- Session strings are useful for containerized environments where persistent file storage may not be available
-- All data is processed locally on your machine; no data is sent to any third-party servers
-
-### Structure of Retrieved Data
-
-The ingestor returns data in the following format:
-
-```json
-{
-  "conversations": [
-    {
-      "id": "123456789",
-      "name": "John Doe",
-      "username": "johndoe",
-      "type": "direct",
-      "unread_count": 0,
-      "last_message_date": "2023-03-18T12:00:00"
-    }
-  ],
-  "messages": [
-    {
-      "id": "1001",
-      "conversation_id": "123456789",
-      "conversation_name": "John Doe",
-      "conversation_username": "johndoe",
-      "date": "2023-03-18T11:30:00",
-      "text": "Hello, this is a message",
-      "outgoing": false,
-      "media_type": null,
-      "reply_to_msg_id": null,
-      "source": "telegram"
-    }
-  ]
-}
-```
-
-For a complete example, see `examples/telegram_ingestor_example.py`.
-
-## ICI Core
-
-Intelligent Collective Intelligence (ICI) Core library provides the foundation for ICI data ingestion and processing pipelines.
-
-## Overview
-
-ICI Core provides:
-
-- Base interfaces for data ingestion pipelines
-- Storage adapters for saving processed data
-- Utilities for consistent logging, error handling, and configuration
-
-## Configuration
-
-ICI Core uses a configuration file to set up services, storage, and pipeline parameters. By default, it looks for a file specified by the `ICI_CONFIG_PATH` environment variable.
-
-Example `config.yaml`:
+The AI model is configured in the `generator` section of `config.yaml`:
 
 ```yaml
-storage:
-  type: local
-  path: ./data
-
-telegram:
-  api_id: YOUR_API_ID
-  api_hash: YOUR_API_HASH
-  phone: YOUR_PHONE_NUMBER
-  session_file: ./telegram_session.session
-  group_usernames:
-    - some_group_name
-    - another_group
+generator:
+  api_key: $GENERATOR_API_KEY
+  model: gpt-4o
+  provider: openai
+  type: langchain
+  default_options:
+    temperature: 0.7
+    max_tokens: 1024
+    frequency_penalty: 0.0
+    presence_penalty: 0.0
+    top_p: 1.0
 ```
 
-## Basic Usage
+### Available OpenAI Models
 
-### Creating an Ingestion Pipeline
+You can change the `model` parameter to any of these OpenAI models:
+- `gpt-4o` (default)
+- `gpt-4-turbo`
+- `gpt-4`
+- `gpt-3.5-turbo`
 
-```python
-from ici.adapters.pipelines.telegram import TelegramIngestionPipeline
-from ici.adapters.loggers import StructuredLogger
+### Using Anthropic Claude Models
 
-# Create a logger
-logger = StructuredLogger(name="telegram_pipeline")
+To switch to Claude models:
 
-# Initialize the pipeline
-pipeline = TelegramIngestionPipeline(logger_name="telegram_pipeline")
-await pipeline.initialize()
-
-# Register an ingestor
-pipeline.register_ingestor(
-    ingestor_id="telegram_ingestor", 
-    ingestor_config={}
-)
-
-# Run the pipeline once
-pipeline.start()
+```yaml
+generator:
+  api_key: $GENERATOR_API_KEY
+  model: claude-3-opus-20240229
+  provider: anthropic
+  type: langchain
+  default_options:
+    temperature: 0.7
+    max_tokens: 1024
 ```
 
-## Examples
+Available Claude models:
+- `claude-3-opus-20240229`
+- `claude-3-sonnet-20240229`
+- `claude-3-haiku-20240307`
 
-See the `examples` directory for complete working examples:
+### Using Ollama Models
 
-- `examples/scheduled_telegram_pipeline_example.py` - Example of a Telegram ingestion pipeline that can be run once or scheduled
+To use locally hosted Ollama models:
 
-## Development
+1. Install Ollama (https://ollama.com/)
+2. Pull your preferred model (e.g., `ollama pull llama3`)
+3. Update your configuration:
 
-### Setup
-
-1. Clone the repository
-```bash
-git clone https://github.com/yourusername/ici-core.git
-cd ici-core
+```yaml
+generator:
+  model: llama3
+  provider: ollama
+  type: langchain
+  default_options:
+    temperature: 0.7
+    max_tokens: 1024
 ```
 
-2. Create a virtual environment
-```bash
-python -m venv venv
-source venv/bin/activate  # On Windows use: venv\Scripts\activate
-```
+Available Ollama models depend on what you've pulled, but common options include:
+- `llama3`
+- `mistral`
+- `mixtral`
+- `vicuna`
+- `gemma`
 
-3. Install development dependencies
-```bash
-pip install -e ".[dev]"
-```
+## 4. Documentation
 
-### Testing
+Comprehensive documentation is available in the `docs` directory:
 
-Run tests with pytest:
-```bash
-pytest tests/
-```
+- [Functional Requirements](docs/functional-requirements.md): Detailed requirements for the ICI framework
+- [Technical Specifications](docs/tech-specs.md): In-depth technical details of components and architecture
+- [Project Structure](docs/project-structure.md): Overview of the codebase organization
 
-## License
+## 5. License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 6. How to Contribute
+
+We welcome contributions to ICI Core! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines on how to contribute to the project.
+
+For quick reference:
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add some amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
