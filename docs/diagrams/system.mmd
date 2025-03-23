@@ -1,0 +1,39 @@
+graph TD
+    %% Ingestion Pipeline
+    subgraph Ingestion Pipeline
+        Ingestor --> Preprocessor
+        Preprocessor --> Embedder
+        Embedder --> VectorStore
+        IngestionPipeline --> Ingestor
+        IngestionPipeline --> Preprocessor
+        IngestionPipeline --> Embedder
+        IngestionPipeline --> VectorStore
+        IngestionPipeline --> Database[ingestor_state]
+    end
+
+    %% Query Pipeline
+    subgraph Query Pipeline
+        Orchestrator --> Validator
+        Orchestrator --> Embedder
+        Orchestrator --> VectorStore
+        Orchestrator --> PromptBuilder
+        Orchestrator --> Generator
+    end
+
+    %% Shared Components
+    Logger --> IngestionPipeline
+    Logger --> Orchestrator
+    Logger --> Ingestor
+    Logger --> Preprocessor
+    Logger --> Embedder
+    Logger --> VectorStore
+    Logger --> Validator
+    Logger --> PromptBuilder
+    Logger --> Generator
+
+    %% Database
+    Database --> IngestionPipeline
+
+    %% Notes
+    classDef pipeline fill:#f9f,stroke:#333,stroke-width:2px;
+    class IngestionPipeline,Orchestrator pipeline;

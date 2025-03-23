@@ -1,0 +1,9 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+
+# Restrictions
+Use YAML file which exists in root "./config.yaml", do not create new yaml file or create function to create a test YAML file.
+Do not change function interface until specifically told to do so. Maintain the function name, arguments, output.
