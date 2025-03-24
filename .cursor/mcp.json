@@ -1,8 +1,14 @@
 {
     "mcpServers": {
-      "time": {
-    "command": "docker",
-    "args": ["run", "-i", "--rm", "mcp/time"]
-  }
+      "linear": {
+        "command": "npx",
+        "args": [
+          "-y",
+          "linear-mcp-server"
+        ],
+        "env": {
+          "LINEAR_API_KEY": "lin_oauth_88b2bafda66d8df6b590f1f83e74611057c322074cd9de4768dfae5d4bf31239"
+        }
+      }
     }
   }

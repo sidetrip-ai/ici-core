@@ -7,7 +7,6 @@ pytest-cov>=4.0.0
 pytest-asyncio>=0.25.0
 black>=25.0.1
 
-# Optional dependencies
 sentence-transformers>=3.4.1  # For text embeddings
 torch>=2.6.0  # Required for sentence-transformers
 faiss-cpu>=1.7.0  # For vector similarity search

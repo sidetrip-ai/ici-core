@@ -53,6 +53,22 @@ chmod +x setup.sh
 ./setup.sh
 ```
 
+#### One-line Installation (Experimental)
+
+You can also install the framework with a single command which will automatically clone the repository and set up the environment:
+
+```bash
+curl -s https://raw.githubusercontent.com/yourusername/ici-core/main/install.sh | bash
+```
+
+This command will:
+1. Check if git and Python are installed
+2. Find or clone the repository
+3. Set up a virtual environment
+4. Install all dependencies automatically
+
+Note: This installation method is new and experimental. If you encounter any issues, please use the manual setup method below.
+
 Alternatively, you can set up manually:
 
 ```bash
