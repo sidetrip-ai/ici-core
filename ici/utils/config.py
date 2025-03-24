@@ -117,7 +117,8 @@ def get_component_config(component_name: str, config_path: Optional[str] = None)
 
         # Only print if console output is enabled in logger configuration
         console_output_enabled = config.get("loggers", {}).get("structured_logger", {}).get("console_output", True)
-        if console_output_enabled:
+        logger_level = config.get("loggers", {}).get("structured_logger", {}).get("level", "INFO")
+        if console_output_enabled and logger_level == "DEBUG":
             print({
                 "action": "CONFIG_LOADED",
                 "message": "Configuration loaded successfully",
