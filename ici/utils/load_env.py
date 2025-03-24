@@ -1,4 +1,4 @@
- #!/usr/bin/env python3
+#!/usr/bin/env python3
 """
 Environment Variable Loader
 
@@ -37,9 +37,9 @@ def load_env(env_file: Optional[str] = None) -> None:
         print(f"Create one by copying .env.example: cp .env.example .env")
         return
     
-    # Load the .env file
-    load_dotenv(env_file)
-    print(f"Loaded environment variables from {env_file}")
+    # Load the .env file with override=True to override existing environment variables
+    load_dotenv(env_file, override=True)
+    print(f"Loaded environment variables from {env_file} (with override)")
 
 
 if __name__ == "__main__":
