@@ -29,8 +29,8 @@ ingestors:
     session_string: $TELEGRAM_SESSION_STRING
 loggers:
   structured_logger:
-    console_output: false
-    level: WARNING
+    console_output: true
+    level: ERROR
     log_file: ./logs/structured_logger.log
     name: structured_logger
     source_token: $SOURCE_TOKEN
