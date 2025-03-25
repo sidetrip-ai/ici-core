@@ -271,15 +271,16 @@ class TelegramIngestor(Ingestor):
         api_id = self._config.get("api_id")
         api_hash = self._config.get("api_hash")
         phone_number = self._config.get("phone_number")
+        session_string = self._config.get("session_string")
         
         # Create session
-        if self._session_string:
+        if self._session_string and self._session_string != "your_telegram_session_string" and self._session_string != "":
             session = StringSession(self._session_string)
             self.logger.debug({
                 "action": "SESSION_STRING_USED",
                 "message": "Using cached session string"
             })
-        elif "session_string" in self._config:
+        elif "session_string" in self._config and session_string != "your_telegram_session_string" and session_string != "":
             session = StringSession(self._config["session_string"])
             # Cache it for future use
             self._session_string = self._config["session_string"]
