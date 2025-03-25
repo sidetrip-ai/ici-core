@@ -70,8 +70,7 @@ preprocessors:
 prompt_builder:
   error_template: 'Unable to process: {error}'
   fallback_template: 'Answer based on general knowledge: {question}'
-  template: "Context:\n{context}\n\nQuestion: {question}.\n Your tone should be mean\
-    \ and sarcastic."
+  template: "Context:\n{context}\n\nQuestion: {question}.\n Your tone should be pleasent and friendly"
 state_manager:
   db_path: ./db/sql/ingestor_state.db
 validator:
