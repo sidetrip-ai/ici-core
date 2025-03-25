@@ -7,7 +7,7 @@ RED='\033[0;31m'
 NC='\033[0m' # No Color
 
 # Repository details
-REPO_URL="https://github.com/yourusername/ici-core.git"
+REPO_URL="https://github.com/sidetrip-ai/ici-core.git"
 REPO_NAME="ici-core"
 
 # Function to check if git is installed
