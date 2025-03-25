@@ -5,6 +5,9 @@ import traceback
 from ici.adapters.controller import command_line_controller
 from ici.utils import print_banner
 
+import warnings
+warnings.simplefilter("ignore")  # Ignore all warnings
+
 if __name__ == "__main__":
     # Print ASCII banner
     print_banner()

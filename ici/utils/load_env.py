@@ -39,7 +39,7 @@ def load_env(env_file: Optional[str] = None) -> None:
     
     # Load the .env file with override=True to override existing environment variables
     load_dotenv(env_file, override=True)
-    print(f"Loaded environment variables from {env_file} (with override)")
+    # print(f"Loaded environment variables from {env_file} (with override)")
 
 
 if __name__ == "__main__":
@@ -51,7 +51,7 @@ if __name__ == "__main__":
     load_env(args.env_file)
     
     # Print the loaded environment variables (without values for security)
-    print("\nLoaded environment variables (showing names only for security):")
+    # print("\nLoaded environment variables (showing names only for security):")
     env_vars = [var for var in os.environ if var in open(args.env_file or ".env").read()]
     for var in sorted(env_vars):
         print(f"  - {var}: ***") 
