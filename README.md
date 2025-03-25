@@ -22,100 +22,89 @@ Key features include:
 - Configurable vector storage backends
 - Comprehensive logging and error handling
 
-## 2. How to Use
+## 2. Getting Started
 
-Simple command to get started:
-```
-bash setup.sh && cp .env.example .env
-```
-
-### Installation
-
-#### Prerequisites
+### Prerequisites
 - Python 3.8 or higher
 - pip package manager
 - Git (if cloning the repository)
 
-#### Setup Scripts
+### Installation and Setup
 
-We provide two setup scripts to help you get started quickly:
+Choose ONE of the following installation methods based on your preference:
 
-- `setup.sh` for macOS/Linux users
-
-These scripts will:
-1. Check if a virtual environment is active
-2. Create and activate a virtual environment if needed
-3. Install all required dependencies from `requirements.txt`
-
+#### Option A: Quick Setup (Recommended for Most Users)
 ```bash
-# For macOS/Linux
+# 1. Clone the repository
+git clone https://github.com/sidetrip-ai/ici-core.git
+cd ici-core
+
+# 2. Run the setup script
 chmod +x setup.sh
 ./setup.sh
+
+# 3. Create and configure your environment file
+cp .env.example .env
+# Edit .env with your API keys and configuration
 ```
 
-#### One-line Installation (Experimental)
-
-You can also install the framework with a single command which will automatically clone the repository and set up the environment:
-
+#### Option B: One-line Installation (Experimental)
 ```bash
-curl -s https://raw.githubusercontent.com/yourusername/ici-core/main/install.sh | bash
+# This will automatically clone the repo, set up dependencies, and prompt for configuration
+curl -s https://raw.githubusercontent.com/sidetrip-ai/ici-core/main/install.sh | bash
+
+# After installation, edit your .env file
+cp .env.example .env
+# Edit .env with your API keys and configuration
 ```
 
-This command will:
-1. Check if git and Python are installed
-2. Find or clone the repository
-3. Set up a virtual environment
-4. Install all dependencies automatically
-
-Note: This installation method is new and experimental. If you encounter any issues, please use the manual setup method below.
-
-Alternatively, you can set up manually:
-
+#### Option C: Manual Installation (For Advanced Users)
 ```bash
-# Create virtual environment
+# 1. Clone the repository
+git clone https://github.com/yourusername/ici-core.git
+cd ici-core
+
+# 2. Create virtual environment
 python -m venv venv
 
-# Activate virtual environment
+# 3. Activate virtual environment
 # On macOS/Linux:
 source venv/bin/activate
 # On Windows:
 venv\Scripts\activate
 
-# Install dependencies
+# 4. Install dependencies
 pip install -r requirements.txt
+
+# 5. Create and configure your environment file
+cp .env.example .env
+# Edit .env with your API keys and configuration
 ```
 
 ### Configuration
 
-#### Environment Variables
+After installation, you need to configure your environment variables in the `.env` file:
 
-Copy the `.env.example` file to `.env` and update the values:
+#### Required API Keys
 
-```bash
-cp .env.example .env
-```
-
-Then edit the `.env` file with your credentials:
-
-1. **Telegram API Credentials** (required for Telegram ingestion):
+1. **Telegram API Credentials** (needed for Telegram ingestion):
    - `TELEGRAM_API_ID`: Your Telegram API ID
    - `TELEGRAM_API_HASH`: Your Telegram API hash
    - `TELEGRAM_PHONE_NUMBER`: Your phone number with country code
-   - `TELEGRAM_SESSION_STRING`: Your Telegram session string
 
-2. **Generator API Key** (required for OpenAI/Anthropic models):
-   - `GENERATOR_API_KEY`: Your OpenAI/Anthropic API key
+2. **Generator API Key** (needed for AI model access):
+   - `GENERATOR_API_KEY`: Your OpenAI or Anthropic API key
 
-#### Getting Telegram API Credentials
+#### Getting Required API Keys
 
+**For Telegram:**
 1. Visit https://my.telegram.org/apps
 2. Log in with your phone number
 3. Create a new application
 4. Note your API ID and API hash
-5. The session string will automatically be generated on first run.
+5. The session string will be generated automatically on first run
 
-#### Getting OpenAI API Key
-
+**For OpenAI:**
 1. Visit https://platform.openai.com/
 2. Sign up or log in to your account
 3. Navigate to API keys section
@@ -124,11 +113,13 @@ Then edit the `.env` file with your credentials:
 
 ### Running the Application
 
-Once configured, run the application using:
+Once installed and configured, run the application with:
 
 ```bash
 python main.py
 ```
+
+This will start the CLI interface where you can interact with your AI assistant.
 
 ## 3. How to Change AI Model
 
