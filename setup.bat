@@ -53,6 +53,7 @@ if "%VIRTUAL_ENV%"=="" (
     echo %GREEN%Active virtual environment detected: %VIRTUAL_ENV%%NC%
     exit /b 0
 )
+goto :eof
 
 :setup_venv
 :: Create and activate virtual environment if it doesn't exist
@@ -75,7 +76,7 @@ if %ERRORLEVEL% neq 0 (
     exit /b 1
 )
 echo %GREEN%Virtual environment activated!%NC%
-exit /b 0
+goto :eof
 
 :install_dependencies
 :: Install dependencies from requirements.txt
@@ -86,20 +87,19 @@ if %ERRORLEVEL% neq 0 (
     exit /b 1
 )
 echo %GREEN%Dependencies installed successfully!%NC%
-exit /b 0
+goto :eof
 
 :verify_dependencies
 :: Verify all dependencies are installed
 echo %YELLOW%Verifying installed dependencies...%NC%
 
-set "has_missing=0"
-set "has_mismatch=0"
-set "missing_packages="
-set "version_mismatches="
+set has_missing=0
+set has_mismatch=0
+set missing_packages=
 
 :: Read requirements.txt and check each package
 for /f "tokens=*" %%a in (requirements.txt) do (
-    set "line=%%a"
+    set line=%%a
     
     :: Skip comments and empty lines
     echo !line! | findstr /r "^#" > nul
@@ -107,20 +107,19 @@ for /f "tokens=*" %%a in (requirements.txt) do (
         if not "!line!"=="" (
             :: Extract package name and version
             for /f "tokens=1,2 delims=>=" %%b in ("!line!") do (
-                set "package=%%b"
-                set "package=!package: =!"
-                set "version=%%c"
+                set package=%%b
+                set package=!package: =!
+                set version=%%c
                 
                 :: Check if package is installed
                 pip show !package! > nul 2>&1
                 if !ERRORLEVEL! neq 0 (
-                    set "has_missing=1"
-                    set "missing_packages=!missing_packages!  - !line!
-"
+                    set has_missing=1
+                    set missing_packages=!missing_packages!  - !line!
                 ) else if not "!version!"=="" (
                     :: Version check is simplified in batch - just report the version
                     for /f "tokens=2" %%i in ('pip show !package! ^| findstr "Version"') do (
-                        set "installed_version=%%i"
+                        set installed_version=%%i
                         echo %YELLOW%Package !package! installed version: !installed_version!, required: !version!%NC%
                     )
                 )
@@ -144,4 +143,4 @@ if !has_missing! neq 0 (
 )
 
 echo %GREEN%All dependencies verified successfully!%NC%
-exit /b 0 
+goto :eof 

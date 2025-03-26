@@ -2,14 +2,14 @@
 setlocal enabledelayedexpansion
 
 :: Colors for output
-set "GREEN=[92m"
-set "YELLOW=[93m"
-set "RED=[91m"
-set "NC=[0m"
+set GREEN=[92m
+set YELLOW=[93m
+set RED=[91m
+set NC=[0m
 
 :: Repository details
-set "REPO_URL=https://github.com/sidetrip-ai/ici-core.git"
-set "REPO_NAME=ici-core"
+set REPO_URL=https://github.com/sidetrip-ai/ici-core.git
+set REPO_NAME=ici-core
 
 :: Check if git is installed
 call :check_git || exit /b 1
@@ -42,6 +42,7 @@ if %ERRORLEVEL% neq 0 (
 )
 echo %GREEN%Git is installed.%NC%
 exit /b 0
+goto :eof
 
 :check_python
 :: Check if Python is installed
@@ -54,29 +55,31 @@ if %ERRORLEVEL% neq 0 (
 )
 echo %GREEN%Python is installed.%NC%
 exit /b 0
+goto :eof
 
 :find_repo
 :: First check current directory
 if exist "%REPO_NAME%" (
-    set "REPO_PATH=%CD%\%REPO_NAME%"
+    set REPO_PATH=%CD%\%REPO_NAME%
     exit /b 0
 )
 
 :: Then check parent directory
 if exist "..\%REPO_NAME%" (
     pushd ..
-    set "REPO_PATH=!CD!\%REPO_NAME%"
+    set REPO_PATH=!CD!\%REPO_NAME%
     popd
     exit /b 0
 )
 
 :: Then check user home directory
 if exist "%USERPROFILE%\%REPO_NAME%" (
-    set "REPO_PATH=%USERPROFILE%\%REPO_NAME%"
+    set REPO_PATH=%USERPROFILE%\%REPO_NAME%
     exit /b 0
 )
 
 exit /b 1
+goto :eof
 
 :check_repo
 :: Check if repository is already cloned
@@ -94,4 +97,5 @@ if %ERRORLEVEL% equ 0 (
     )
     cd /d "%REPO_NAME%"
     exit /b 0
-) 
+)
+goto :eof 
