@@ -31,9 +31,11 @@ Key features include:
 
 ### Installation and Setup
 
-Choose ONE of the following installation methods based on your preference:
+Choose ONE of the following installation methods based on your operating system and preference:
 
 #### Option A: Quick Setup (Recommended for Most Users)
+
+##### For macOS/Linux:
 ```bash
 # 1. Clone the repository
 git clone https://github.com/sidetrip-ai/ici-core.git
@@ -48,7 +50,23 @@ cp .env.example .env
 # Edit .env with your API keys and configuration
 ```
 
+##### For Windows:
+```powershell
+# 1. Clone the repository
+git clone https://github.com/sidetrip-ai/ici-core.git
+cd ici-core
+
+# 2. Run the setup script
+setup.bat
+
+# 3. Create and configure your environment file
+copy .env.example .env
+# Edit .env with your API keys and configuration
+```
+
 #### Option B: One-line Installation (Experimental)
+
+##### For macOS/Linux:
 ```bash
 # This will automatically clone the repo, set up dependencies, and prompt for configuration
 curl -s https://raw.githubusercontent.com/sidetrip-ai/ici-core/main/install.sh | bash
@@ -58,26 +76,56 @@ cp .env.example .env
 # Edit .env with your API keys and configuration
 ```
 
+##### For Windows:
+```powershell
+# Download and run the install script
+Invoke-WebRequest https://raw.githubusercontent.com/sidetrip-ai/ici-core/main/install.bat -OutFile install.bat
+.\install.bat
+
+# After installation, edit your .env file
+copy .env.example .env
+# Edit .env with your API keys and configuration
+```
+
 #### Option C: Manual Installation (For Advanced Users)
+
+##### For macOS/Linux:
 ```bash
 # 1. Clone the repository
-git clone https://github.com/yourusername/ici-core.git
+git clone https://github.com/sidetrip-ai/ici-core.git
 cd ici-core
 
 # 2. Create virtual environment
-python -m venv venv
+python3 -m venv venv
 
 # 3. Activate virtual environment
-# On macOS/Linux:
 source venv/bin/activate
-# On Windows:
-venv\Scripts\activate
 
 # 4. Install dependencies
 pip install -r requirements.txt
 
 # 5. Create and configure your environment file
 cp .env.example .env
+# Edit .env with your API keys and configuration
+```
+
+##### For Windows:
+```powershell
+# 1. Clone the repository
+git clone https://github.com/sidetrip-ai/ici-core.git
+cd ici-core
+
+# 2. Create virtual environment
+python -m venv venv
+
+# 3. Activate virtual environment
+venv\Scripts\activate
+
+# 4. Install dependencies
+pip install -r requirements.txt
+
+# 5. Create and configure your environment file
+copy .env.example .env
 # Edit .env with your API keys and configuration
 ```
 
@@ -113,9 +161,23 @@ After installation, you need to configure your environment variables in the `.en
 
 ### Running the Application
 
-Once installed and configured, run the application with:
+Once installed and configured, run the application:
 
+##### For macOS/Linux:
 ```bash
+# Ensure virtual environment is activated if not already
+source venv/bin/activate
+
+# Run the application
+python main.py
+```
+
+##### For Windows:
+```powershell
+# Ensure virtual environment is activated if not already
+venv\Scripts\activate
+
+# Run the application
 python main.py
 ```
 
