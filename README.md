@@ -51,17 +51,17 @@ cp .env.example .env
 ```
 
 ##### For Windows:
-```cmd
-:: 1. Clone the repository
+```powershell
+# 1. Clone the repository
 git clone https://github.com/sidetrip-ai/ici-core.git
 cd ici-core
 
-:: 2. Run the setup script
+# 2. Run the setup script
 setup.bat
 
-:: 3. Create and configure your environment file
+# 3. Create and configure your environment file
 copy .env.example .env
-:: Edit .env with your API keys and configuration
+# Edit .env with your API keys and configuration
 ```
 
 #### Option B: One-line Installation (Experimental)
@@ -77,14 +77,14 @@ cp .env.example .env
 ```
 
 ##### For Windows:
-```cmd
-:: Download and run the install script
-curl -s -o install.bat https://raw.githubusercontent.com/sidetrip-ai/ici-core/main/install.bat
-install.bat
+```powershell
+# Download and run the install script
+Invoke-WebRequest https://raw.githubusercontent.com/sidetrip-ai/ici-core/main/install.bat -OutFile install.bat
+.\install.bat
 
-:: After installation, edit your .env file
+# After installation, edit your .env file
 copy .env.example .env
-:: Edit .env with your API keys and configuration
+# Edit .env with your API keys and configuration
 ```
 
 #### Option C: Manual Installation (For Advanced Users)
@@ -110,23 +110,23 @@ cp .env.example .env
 ```
 
 ##### For Windows:
-```cmd
-:: 1. Clone the repository
+```powershell
+# 1. Clone the repository
 git clone https://github.com/sidetrip-ai/ici-core.git
 cd ici-core
 
-:: 2. Create virtual environment
+# 2. Create virtual environment
 python -m venv venv
 
-:: 3. Activate virtual environment
+# 3. Activate virtual environment
 venv\Scripts\activate
 
-:: 4. Install dependencies
+# 4. Install dependencies
 pip install -r requirements.txt
 
-:: 5. Create and configure your environment file
+# 5. Create and configure your environment file
 copy .env.example .env
-:: Edit .env with your API keys and configuration
+# Edit .env with your API keys and configuration
 ```
 
 ### Configuration
@@ -173,11 +173,11 @@ python main.py
 ```
 
 ##### For Windows:
-```cmd
-:: Ensure virtual environment is activated if not already
+```powershell
+# Ensure virtual environment is activated if not already
 venv\Scripts\activate
 
-:: Run the application
+# Run the application
 python main.py
 ```
 
