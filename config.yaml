@@ -1,7 +1,7 @@
 embedders:
   sentence_transformer:
     batch_size: 32
-    device: cuda
+    device: cpu
     model_name: all-MiniLM-L6-v2
 generator:
   api_key: $GENERATOR_API_KEY
