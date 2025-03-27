@@ -2,13 +2,13 @@
 setlocal enabledelayedexpansion
 
 :: Colors for output
-set "GREEN=[92m"
-set "YELLOW=[93m"
-set "RED=[91m"
-set "NC=[0m"
+set GREEN=[92m
+set YELLOW=[93m
+set RED=[91m
+set NC=[0m
 
 :: Default virtual environment directory name
-set "VENV_DIR=venv"
+set VENV_DIR=venv
 
 :: Check if the script is being run from the project root directory
 if not exist "requirements.txt" (
@@ -38,7 +38,7 @@ echo %YELLOW%Next Steps:%NC%
 echo 1. To activate the virtual environment in a new terminal:
 echo    %GREEN%%VENV_DIR%\Scripts\activate%NC%
 echo 2. To run the Telegram Application:
-echo    %GREEN%python main.py%NC%
+echo    %GREEN%python3 main.py%NC%
 echo.
 echo %YELLOW%Note: Make sure you have configured your Telegram API credentials in the config file before running the application.%NC%
 
@@ -59,7 +59,7 @@ goto :eof
 :: Create and activate virtual environment if it doesn't exist
 if not exist "%VENV_DIR%\" (
     echo %YELLOW%Creating virtual environment in %VENV_DIR%...%NC%
-    python -m venv %VENV_DIR%
+    python3 -m venv %VENV_DIR%
     if %ERRORLEVEL% neq 0 (
         echo %RED%Failed to create virtual environment.%NC%
         echo %YELLOW%Please ensure Python 3 and venv are installed.%NC%
@@ -81,7 +81,7 @@ goto :eof
 :install_dependencies
 :: Install dependencies from requirements.txt
 echo %YELLOW%Installing dependencies from requirements.txt...%NC%
-pip install -q -r requirements.txt
+python3 -m pip install -q -r requirements.txt
 if %ERRORLEVEL% neq 0 (
     echo %RED%Failed to install dependencies.%NC%
     exit /b 1
@@ -112,13 +112,13 @@ for /f "tokens=*" %%a in (requirements.txt) do (
                 set version=%%c
                 
                 :: Check if package is installed
-                pip show !package! > nul 2>&1
+                python3 -m pip show !package! > nul 2>&1
                 if !ERRORLEVEL! neq 0 (
                     set has_missing=1
                     set missing_packages=!missing_packages!  - !line!
                 ) else if not "!version!"=="" (
                     :: Version check is simplified in batch - just report the version
-                    for /f "tokens=2" %%i in ('pip show !package! ^| findstr "Version"') do (
+                    for /f "tokens=2" %%i in ('python3 -m pip show !package! ^| findstr "Version"') do (
                         set installed_version=%%i
                         echo %YELLOW%Package !package! installed version: !installed_version!, required: !version!%NC%
                     )
@@ -138,7 +138,7 @@ if !has_missing! neq 0 (
     )
     
     echo %YELLOW%Please run the following command to install packages:%NC%
-    echo pip install -r requirements.txt
+    echo python3 -m pip install -r requirements.txt
     exit /b 1
 )
 
