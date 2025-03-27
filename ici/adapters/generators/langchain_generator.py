@@ -96,6 +96,16 @@ class LangchainGenerator(Generator):
             # For Ollama, we return the base_url instead of an API key
             base_url = generator_config.get("base_url", "http://localhost:11434")
             return base_url
+        elif self._provider == "openrouter":
+            api_key = generator_config.get("api_key")
+            if not api_key:
+                api_key = os.environ.get("OPENROUTER_API_KEY")
+                
+            if not api_key:
+                raise ValueError("OpenRouter API key not found in config or environment")
+                
+            return api_key
+            
         else:
             raise ValueError(f"Unsupported provider: {self._provider}")
             
@@ -163,6 +173,15 @@ class LangchainGenerator(Generator):
                     # Add other Ollama-specific parameters as needed
                     num_predict=self._default_options.get("max_tokens", 1024),
                     top_p=self._default_options.get("top_p", 1.0),
+                )
+            elif self._provider == "openrouter":
+                self._llm = ChatOpenAI(
+                    base_url="https://openrouter.ai/api/v1",
+                    model_name=self._model,
+                    temperature=self._default_options.get("temperature", 0.7),
+                    max_tokens=self._default_options.get("max_tokens", 1024),
+                    top_p=self._default_options.get("top_p", 1.0),
+                    api_key=credentials  # Use API key but don't store it as instance variable
                 )
             # Add additional providers here as elif blocks
             
@@ -269,6 +288,17 @@ class LangchainGenerator(Generator):
                                 temperature=options.get("temperature", self._default_options.get("temperature")),
                                 num_predict=options.get("max_tokens", self._default_options.get("max_tokens")),
                                 top_p=options.get("top_p", self._default_options.get("top_p")),
+                            )
+                        elif self._provider == "openrouter":
+                            # Get credentials securely when needed
+                            credentials = self._get_credentials()
+                            self._llm = ChatOpenAI(
+                                base_url="https://openrouter.ai/api/v1",
+                                model_name=self._model,
+                                temperature=self._default_options.get("temperature", 0.7),
+                                max_tokens=self._default_options.get("max_tokens", 1024),
+                                top_p=self._default_options.get("top_p", 1.0),
+                                api_key=credentials  # Use API key but don't store it as instance variable
                             )
                         
                         # Use the temporary LLM for this request if created
@@ -380,6 +410,15 @@ class LangchainGenerator(Generator):
                     num_predict=self._default_options.get("max_tokens", 1024),
                     top_p=self._default_options.get("top_p", 1.0),
                 )
+            elif self._provider == "openrouter":
+                self._llm = ChatOpenAI(
+                    base_url="https://openrouter.ai/api/v1",
+                    model_name=self._model,
+                    temperature=self._default_options.get("temperature", 0.7),
+                    max_tokens=self._default_options.get("max_tokens", 1024),
+                    top_p=self._default_options.get("top_p", 1.0),
+                    api_key=credentials  # Use API key but don't store it as instance variable
+                )
             # Add additional providers here as elif blocks
             
             # Update the chain with the new LLM
@@ -463,6 +502,16 @@ class LangchainGenerator(Generator):
                     temperature=self._default_options.get("temperature", 0.7),
                     num_predict=self._default_options.get("max_tokens", 1024),
                     top_p=self._default_options.get("top_p", 1.0),
+                )
+            elif self._provider == "openrouter":
+                credentials = self._get_credentials()
+                self._llm = ChatOpenAI(
+                    base_url="https://openrouter.ai/api/v1",
+                    model_name=self._model,
+                    temperature=self._default_options.get("temperature", 0.7),
+                    max_tokens=self._default_options.get("max_tokens", 1024),
+                    top_p=self._default_options.get("top_p", 1.0),
+                    api_key=credentials  # Use API key but don't store it as instance variable
                 )
             # Add additional providers here as elif blocks
             
