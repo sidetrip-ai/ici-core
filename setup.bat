@@ -37,7 +37,15 @@ echo.
 echo %YELLOW%Next Steps:%NC%
 echo 1. To activate the virtual environment in a new terminal:
 echo    %GREEN%%VENV_DIR%\Scripts\activate%NC%
-echo 2. To run the Telegram Application:
+echo 2. Create your environment file:
+echo    %GREEN%copy .env.example .env%NC%
+echo 3. Edit the .env file with your API keys:
+echo    %GREEN%notepad .env%NC%
+echo    Or use one of these commands:
+echo    %GREEN%code .env%NC%     # For Visual Studio Code
+echo    %GREEN%start notepad .env%NC%  # For Notepad
+echo    %GREEN%start wordpad .env%NC%  # For WordPad
+echo 4. To run the Telegram Application:
 echo    %GREEN%python3 main.py%NC%
 echo.
 echo %YELLOW%Note: Make sure you have configured your Telegram API credentials in the config file before running the application.%NC%

@@ -180,7 +180,25 @@ echo
 echo -e "${YELLOW}Next Steps:${NC}"
 echo "1. To activate the virtual environment in a new terminal:"
 echo -e "   ${GREEN}source $VENV_DIR/bin/activate${NC}"
-echo "2. To run the Telegram Application:"
+echo "2. Create your environment file:"
+echo -e "   ${GREEN}cp .env.example .env${NC}"
+echo "3. Edit the .env file with your API keys:"
+
+# Check if running on macOS
+if [[ "$(uname)" == "Darwin" ]]; then
+    echo -e "   ${GREEN}open .env${NC}     # Opens in default text editor (macOS)"
+else
+    echo -e "   ${GREEN}nano .env${NC}     # Opens in nano editor (Linux)"
+fi
+
+echo "   Or use one of these commands:"
+if [[ "$(uname)" == "Darwin" ]]; then
+    echo -e "   ${GREEN}nano .env${NC}     # For nano editor"
+fi
+echo -e "   ${GREEN}vim .env${NC}     # For Vim editor"
+echo -e "   ${GREEN}code .env${NC}    # For Visual Studio Code"
+echo -e "   ${GREEN}subl .env${NC}    # For Sublime Text"
+echo "4. To run the Telegram Application:"
 echo -e "   ${GREEN}python3 main.py${NC}"
 echo
 echo -e "${YELLOW}Note: Make sure you have configured your Telegram API credentials in the config file before running the application.${NC}" 
