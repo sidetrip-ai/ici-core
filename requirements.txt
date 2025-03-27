@@ -8,7 +8,7 @@ pytest-asyncio>=0.25.0
 black>=25.0.1
 
 sentence-transformers>=3.4.1  # For text embeddings
-torch>=2.6.0  # Required for sentence-transformers
+torch>=2.2.0  # Required for sentence-transformers
 faiss-cpu>=1.7.0  # For vector similarity search
 telethon>=1.39.0  # For Telegram API access
 chromadb>=0.6.3  # For ChromaDB vector database

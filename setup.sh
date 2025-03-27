@@ -17,7 +17,7 @@ if [ ! -f "requirements.txt" ]; then
 fi
 
 # Function to check if running in an active virtual environment
-function check_venv() {
+check_venv() {
     if [ -z "$VIRTUAL_ENV" ]; then
         echo -e "${YELLOW}No active virtual environment detected.${NC}"
         return 1
@@ -27,14 +27,14 @@ function check_venv() {
     fi
 }
 
-# Function to create and activate virtual environment if it doesn't exist
-function setup_venv() {
+# Function to setup virtual environment
+setup_venv() {
     if [ ! -d "$VENV_DIR" ]; then
         echo -e "${YELLOW}Creating virtual environment in $VENV_DIR...${NC}"
-        python3 -m venv $VENV_DIR
+        python3 -m venv "$VENV_DIR"
         if [ $? -ne 0 ]; then
             echo -e "${RED}Failed to create virtual environment.${NC}"
-            echo -e "${YELLOW}Please ensure python3 and venv are installed.${NC}"
+            echo -e "${YELLOW}Please ensure Python 3 and venv are installed.${NC}"
             exit 1
         fi
     else
@@ -51,19 +51,19 @@ function setup_venv() {
 }
 
 # Function to verify if a package is installed with correct version
-function verify_package() {
+verify_package() {
     local package=$1
     local required_version=$2
     
     # Check if package is installed
-    if ! pip show "$package" > /dev/null 2>&1; then
+    if ! python3 -m pip show "$package" > /dev/null 2>&1; then
         echo -e "${RED}Package $package is not installed.${NC}"
         return 1
     fi
     
     # If version is specified, check if it meets the requirement
     if [ ! -z "$required_version" ]; then
-        local installed_version=$(pip show "$package" | grep "Version:" | cut -d' ' -f2)
+        local installed_version=$(python3 -m pip show "$package" | grep "Version:" | cut -d' ' -f2)
         if [ -z "$installed_version" ]; then
             echo -e "${RED}Could not determine installed version of $package.${NC}"
             return 1
@@ -81,9 +81,9 @@ function verify_package() {
 }
 
 # Function to install dependencies
-function install_dependencies() {
+install_dependencies() {
     echo -e "${YELLOW}Installing dependencies from requirements.txt...${NC}"
-    pip install -q -r requirements.txt
+    python3 -m pip install -q -r requirements.txt
     if [ $? -ne 0 ]; then
         echo -e "${RED}Failed to install dependencies.${NC}"
         exit 1
@@ -91,8 +91,8 @@ function install_dependencies() {
     echo -e "${GREEN}Dependencies installed successfully!${NC}"
 }
 
-# Function to verify all dependencies
-function verify_dependencies() {
+# Function to verify dependencies
+verify_dependencies() {
     echo -e "${YELLOW}Verifying installed dependencies...${NC}"
     
     local missing_packages=()
@@ -110,10 +110,10 @@ function verify_dependencies() {
             package=$(echo "$package" | tr -d ' ')  # Remove any whitespace
             version="${BASH_REMATCH[3]}"
             
-            if ! pip show "$package" > /dev/null 2>&1; then
+            if ! python3 -m pip show "$package" > /dev/null 2>&1; then
                 missing_packages+=("$line")
             elif [ ! -z "$version" ]; then
-                local installed_version=$(pip show "$package" | grep "Version:" | cut -d' ' -f2)
+                local installed_version=$(python3 -m pip show "$package" | grep "Version:" | cut -d' ' -f2)
                 if [ -z "$installed_version" ] || ! printf "%s\n%s\n" "$version" "$installed_version" | sort -V | tail -n1 | grep -q "$installed_version"; then
                     version_mismatches+=("$line")
                 fi
@@ -140,7 +140,7 @@ function verify_dependencies() {
         fi
         
         echo -e "${YELLOW}Please run the following command to install/upgrade packages:${NC}"
-        echo -e "pip install -r requirements.txt"
+        echo -e "python3 -m pip install -r requirements.txt"
         exit 1
     fi
     
@@ -176,9 +176,11 @@ if [ -z "$VIRTUAL_ENV" ]; then
 fi
 
 # Print next steps
-echo -e "\n${YELLOW}Next Steps:${NC}"
-echo -e "1. To activate the virtual environment in a new terminal:"
-echo -e "   ${GREEN}source venv/bin/activate${NC}"
-echo -e "2. To run the Telegram Application:"
-echo -e "   ${GREEN}python main.py${NC}"
-echo -e "\n${YELLOW}Note: Make sure you have configured your Telegram API credentials in the config file before running the application.${NC}" 
+echo
+echo -e "${YELLOW}Next Steps:${NC}"
+echo "1. To activate the virtual environment in a new terminal:"
+echo -e "   ${GREEN}source $VENV_DIR/bin/activate${NC}"
+echo "2. To run the Telegram Application:"
+echo -e "   ${GREEN}python3 main.py${NC}"
+echo
+echo -e "${YELLOW}Note: Make sure you have configured your Telegram API credentials in the config file before running the application.${NC}" 
