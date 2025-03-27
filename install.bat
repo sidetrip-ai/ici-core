@@ -46,7 +46,7 @@ goto :eof
 
 :check_python
 :: Check if Python is installed
-where python >nul 2>&1
+where python3 >nul 2>&1
 if %ERRORLEVEL% neq 0 (
     echo %RED%Python 3 is not installed.%NC%
     echo %YELLOW%Please install Python 3 first:%NC%
@@ -90,12 +90,30 @@ if %ERRORLEVEL% equ 0 (
     exit /b 0
 ) else (
     echo %YELLOW%Repository not found. Cloning from %REPO_URL%...%NC%
+    
+    :: Check if directory exists and is empty
+    if exist "%REPO_NAME%" (
+        echo %YELLOW%Directory %REPO_NAME% exists but is not a git repository.%NC%
+        echo %YELLOW%Removing existing directory...%NC%
+        rmdir /s /q "%REPO_NAME%"
+    )
+    
+    :: Clone the repository
     git clone "%REPO_URL%"
     if %ERRORLEVEL% neq 0 (
         echo %RED%Failed to clone repository.%NC%
+        echo %YELLOW%Please try the manual installation method from the README.%NC%
         exit /b 1
     )
+    
+    :: Change to the repository directory
     cd /d "%REPO_NAME%"
+    if %ERRORLEVEL% neq 0 (
+        echo %RED%Failed to change to repository directory.%NC%
+        exit /b 1
+    )
+    
+    echo %GREEN%Repository cloned successfully!%NC%
     exit /b 0
 )
 goto :eof 

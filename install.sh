@@ -11,7 +11,7 @@ REPO_URL="https://github.com/sidetrip-ai/ici-core.git"
 REPO_NAME="ici-core"
 
 # Function to check if git is installed
-function check_git() {
+check_git() {
     if ! command -v git &> /dev/null; then
         echo -e "${RED}Git is not installed.${NC}"
         echo -e "${YELLOW}Please install git first:${NC}"
@@ -23,7 +23,7 @@ function check_git() {
 }
 
 # Function to check if Python is installed
-function check_python() {
+check_python() {
     if ! command -v python3 &> /dev/null; then
         echo -e "${RED}Python 3 is not installed.${NC}"
         echo -e "${YELLOW}Please install Python 3 first:${NC}"
@@ -35,7 +35,7 @@ function check_python() {
 }
 
 # Function to find repository location
-function find_repo() {
+find_repo() {
     # First check current directory
     if [ -d "$REPO_NAME" ]; then
         echo "$(pwd)/$REPO_NAME"
@@ -58,7 +58,7 @@ function find_repo() {
 }
 
 # Function to check if repository is already cloned
-function check_repo() {
+check_repo() {
     local repo_path=$(find_repo)
     
     if [ ! -z "$repo_path" ]; then
