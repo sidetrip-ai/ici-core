@@ -17,8 +17,8 @@ generator:
   memory:
     k: 5
     type: buffer
-  model: gpt-4o
-  provider: openai
+  model: deepseek/deepseek-chat-v3-0324:free
+  provider: openrouter
   type: langchain
 ingestors:
   telegram:
