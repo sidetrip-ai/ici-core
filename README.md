@@ -30,9 +30,16 @@ Key features include:
 - pip package manager
 - Git (if cloning the repository)
 
-### Upgrade Python Version on MacOS
+### Upgrade Python Version on MacOS (Only if your version is less than 3.10)
 
 This repository requires Python 3.10 or higher. By default, MacOS comes with Python 3.9 pre-installed. To upgrade to Python 3.12 or any version 3.10 or later and ensure it’s set in your PATH, follow these step-by-step instructions. We’ll use **Homebrew**, a popular package manager for MacOS, to install and manage Python.
+
+### Check your python version
+```
+python3 --version
+```
+
+If the output is 3.10 or greater, than you can move on to [Setup section](#installation-and-setup)
 
 #### Step 1: Install Homebrew (if not already installed)
 
@@ -57,7 +64,7 @@ Homebrew simplifies the installation of software like Python on MacOS. If you do
 
 Once Homebrew is installed, you can use it to install a newer version of Python:
 
-1. In Terminal, run the following command to install the latest version of Python available via Homebrew:
+1. In Terminal, run the following command to install the latest versionof Python available via Homebrew:
 
    ```bash
    brew install python
@@ -123,7 +130,10 @@ cd ici-core
 chmod +x setup.sh
 ./setup.sh
 
-# 3. Create and configure your environment file
+# 3. Activate venv
+source venv/bin/activate
+
+# 4. Create and configure your environment file
 cp .env.example .env
 # Edit .env with your API keys and configuration
 ```
@@ -137,7 +147,10 @@ cd ici-core
 # 2. Run the setup script
 setup.bat
 
-# 3. Create and configure your environment file
+# 3. Activate venv
+venv\Scripts\activate
+
+# 4. Create and configure your environment file
 copy .env.example .env
 # Edit .env with your API keys and configuration
 ```
@@ -149,6 +162,9 @@ copy .env.example .env
 # This will automatically clone the repo, set up dependencies, and prompt for configuration
 curl -s https://raw.githubusercontent.com/sidetrip-ai/ici-core/main/install.sh | bash
 
+# Activate venv
+source venv/bin/activate
+
 # After installation, edit your .env file
 cp .env.example .env
 # Edit .env with your API keys and configuration
@@ -159,6 +175,9 @@ cp .env.example .env
 # Download and run the install script
 Invoke-WebRequest https://raw.githubusercontent.com/sidetrip-ai/ici-core/main/install.bat -OutFile install.bat
 .\install.bat
+
+# Activate venv
+venv\Scripts\activate
 
 # After installation, edit your .env file
 copy .env.example .env
