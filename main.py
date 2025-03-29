@@ -5,6 +5,10 @@ import traceback
 from ici.adapters.controller import command_line_controller
 from ici.utils import print_banner
 
+# set an env variable
+import os
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
+
 import warnings
 warnings.simplefilter("ignore")  # Ignore all warnings
 
