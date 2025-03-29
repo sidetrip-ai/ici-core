@@ -30,6 +30,8 @@ Key features include:
 - pip package manager
 - Git (if cloning the repository)
 
+Note: If you face any issue while installing, check out [troubleshoot](./troubleshoot.md) file for known issues that might arise.
+
 ### Upgrade Python Version on MacOS (Only if your version is less than 3.10)
 
 This repository requires Python 3.10 or higher. By default, MacOS comes with Python 3.9 pre-installed. To upgrade to Python 3.12 or any version 3.10 or later and ensure it’s set in your PATH, follow these step-by-step instructions. We’ll use **Homebrew**, a popular package manager for MacOS, to install and manage Python.
