@@ -50,10 +50,18 @@ class JSONChatHistoryManager(ChatHistoryManager):
             # In a real implementation, load config from YAML
             # For now, we use hardcoded defaults
             os.makedirs(self.base_path, exist_ok=True)
-            self.logger.info(f"Initialized JSONChatHistoryManager with base path: {self.base_path}")
+            self.logger.info({
+                "action": "CHAT_HISTORY_MANAGER_INIT",
+                "message": f"Initialized JSONChatHistoryManager with base path: {self.base_path}",
+                "data": {"base_path": self.base_path}
+            })
             self.initialized = True
         except Exception as e:
-            self.logger.error(f"Failed to initialize JSONChatHistoryManager: {e}")
+            self.logger.error({
+                "action": "CHAT_HISTORY_MANAGER_INIT_ERROR",
+                "message": f"Failed to initialize JSONChatHistoryManager: {str(e)}",
+                "data": {"error": str(e), "error_type": type(e).__name__}
+            })
             raise ChatHistoryError(f"Initialization failed: {e}")
     
     def _check_initialized(self) -> None:
@@ -214,12 +222,21 @@ class JSONChatHistoryManager(ChatHistoryManager):
             chat_path = self._get_chat_path(user_id, chat_id)
             await self._save_chat(chat_data, chat_path)
             
-            self.logger.info(f"Created new chat {chat_id} for user {user_id}")
+            self.logger.info({
+                "action": "CHAT_HISTORY_MANAGER_CREATE_CHAT",
+                "message": f"Created new chat {chat_id} for user {user_id}",
+                "data": {"user_id": user_id, "chat_id": chat_id}
+            })
             return chat_id
-        except UserIDError as e:
+        except UserIDError:
             # Re-raise user ID errors
             raise
         except Exception as e:
+            self.logger.error({
+                "action": "CHAT_HISTORY_MANAGER_CREATE_ERROR",
+                "message": f"Failed to create chat for user {user_id}: {str(e)}",
+                "data": {"user_id": user_id, "error": str(e), "error_type": type(e).__name__}
+            })
             raise ChatHistoryError(f"Failed to create chat for user {user_id}: {e}")
     
     async def add_message(
@@ -281,7 +298,11 @@ class JSONChatHistoryManager(ChatHistoryManager):
             # Save updated chat
             await self._save_chat(chat_data, chat_path)
             
-            self.logger.info(f"Added {role} message {message_id} to chat {chat_id}")
+            self.logger.info({
+                "action": "CHAT_HISTORY_MANAGER_ADD_MESSAGE",
+                "message": f"Added {role} message {message_id} to chat {chat_id}",
+                "data": {"chat_id": chat_id, "role": role, "message_id": message_id}
+            })
             return message_id
         except ChatIDError:
             # Re-raise chat ID errors
@@ -366,7 +387,11 @@ class JSONChatHistoryManager(ChatHistoryManager):
                             chat_info = {k: v for k, v in chat_data.items() if k != "messages"}
                             chats.append(chat_info)
                         except Exception as e:
-                            self.logger.warning(f"Error loading chat {file}: {e}")
+                            self.logger.warning({
+                                "action": "CHAT_HISTORY_MANAGER_LIST_CHATS_ERROR",
+                                "message": f"Error loading chat {file}: {str(e)}",
+                                "data": {"user_id": user_id, "chat_file": file}
+                            })
             else:
                 # Look for files with user_id prefix
                 if not os.path.exists(self.base_path):
@@ -382,7 +407,11 @@ class JSONChatHistoryManager(ChatHistoryManager):
                             chat_info = {k: v for k, v in chat_data.items() if k != "messages"}
                             chats.append(chat_info)
                         except Exception as e:
-                            self.logger.warning(f"Error loading chat {file}: {e}")
+                            self.logger.warning({
+                                "action": "CHAT_HISTORY_MANAGER_LIST_CHATS_ERROR",
+                                "message": f"Error loading chat {file}: {str(e)}",
+                                "data": {"user_id": user_id, "chat_file": file}
+                            })
             
             # Sort by updated_at descending (newest first)
             chats.sort(key=lambda x: x.get("updated_at", ""), reverse=True)
@@ -435,7 +464,11 @@ class JSONChatHistoryManager(ChatHistoryManager):
                     chat_data["title"] = title
                     await self._save_chat(chat_data, chat_path)
                     
-                    self.logger.info(f"Generated title for chat {chat_id}: {title}")
+                    self.logger.info({
+                        "action": "CHAT_HISTORY_MANAGER_GENERATE_TITLE",
+                        "message": f"Generated title for chat {chat_id}: {title}",
+                        "data": {"chat_id": chat_id, "title": title}
+                    })
                     return title
             
             return None
@@ -476,7 +509,11 @@ class JSONChatHistoryManager(ChatHistoryManager):
             # Save updated chat
             await self._save_chat(chat_data, chat_path)
             
-            self.logger.info(f"Renamed chat {chat_id} to '{new_title}'")
+            self.logger.info({
+                "action": "CHAT_HISTORY_MANAGER_RENAME_CHAT",
+                "message": f"Renamed chat {chat_id} to '{new_title}'",
+                "data": {"chat_id": chat_id, "new_title": new_title}
+            })
             return True
         except ChatIDError:
             # Re-raise chat ID errors
@@ -508,7 +545,11 @@ class JSONChatHistoryManager(ChatHistoryManager):
             async with self.lock:
                 os.remove(chat_path)
             
-            self.logger.info(f"Deleted chat {chat_id}")
+            self.logger.info({
+                "action": "CHAT_HISTORY_MANAGER_DELETE_CHAT",
+                "message": f"Deleted chat {chat_id}",
+                "data": {"chat_id": chat_id}
+            })
             return True
         except ChatIDError:
             # Re-raise chat ID errors

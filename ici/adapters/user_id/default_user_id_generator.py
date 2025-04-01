@@ -42,10 +42,18 @@ class DefaultUserIDGenerator(UserIDGenerator):
         try:
             # In a real implementation, load config from YAML
             # For now, we use hardcoded defaults
-            self.logger.info("Initialized DefaultUserIDGenerator")
+            self.logger.info({
+                "action": "USER_ID_GENERATOR_INIT",
+                "message": "Initialized DefaultUserIDGenerator",
+                "data": {"sources": list(self.source_types.keys())}
+            })
             self.initialized = True
         except Exception as e:
-            self.logger.error(f"Failed to initialize DefaultUserIDGenerator: {e}")
+            self.logger.error({
+                "action": "USER_ID_GENERATOR_INIT_ERROR",
+                "message": f"Failed to initialize DefaultUserIDGenerator: {str(e)}",
+                "data": {"error": str(e), "error_type": type(e).__name__}
+            })
             raise UserIDError(f"Initialization failed: {e}")
     
     def _check_initialized(self) -> None:
@@ -91,11 +99,20 @@ class DefaultUserIDGenerator(UserIDGenerator):
             # Generate the user ID
             user_id = f"{source}:{processed_identifier}"
             
-            self.logger.debug(f"Generated user ID: {user_id}")
+            self.logger.debug({
+                "action": "USER_ID_GENERATOR_GENERATE",
+                "message": f"Generated user ID: {user_id}",
+                "data": {"source": source, "identifier": identifier, "user_id": user_id}
+            })
             return user_id
         except Exception as e:
             if isinstance(e, UserIDError):
                 raise
+            self.logger.error({
+                "action": "USER_ID_GENERATOR_ERROR",
+                "message": f"Failed to generate user ID: {str(e)}",
+                "data": {"source": source, "identifier": identifier, "error": str(e), "error_type": type(e).__name__}
+            })
             raise UserIDError(f"Failed to generate user ID: {e}")
     
     async def validate_id(self, user_id: str) -> bool:
