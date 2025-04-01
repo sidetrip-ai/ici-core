@@ -22,7 +22,7 @@ classDiagram
 
     %% Query Pipeline Classes
     class Orchestrator {
-        +process_query(input: str, user_id: str) str
+        +process_query(user_id: str, input: str, chat_id: Optional[str]) Dict[str, Any]
         -get_rules(user_id: str) List[Dict[str, Any]]
         -build_context(user_id: str) Dict[str, Any]
     }
@@ -30,10 +30,20 @@ classDiagram
         +validate(input: str, context: Dict[str, Any], rules: List[Dict[str, Any]]) bool
     }
     class PromptBuilder {
-        +build_prompt(input: str, documents: List[Dict[str, Any]]) str
+        +build_prompt(input: str, documents: List[Dict[str, Any]], chat_history: List[Dict[str, Any]]) str
     }
     class Generator {
         +generate(prompt: str) str
+    }
+    class ChatHistoryManager {
+        +create_chat(user_id: str) str
+        +add_message(chat_id: str, content: str, role: str, metadata: Optional[Dict[str, Any]]) str
+        +get_messages(chat_id: str, limit: Optional[int]) List[Dict[str, Any]]
+        +list_chats(user_id: str) List[Dict[str, Any]]
+        +generate_title(chat_id: str) Optional[str]
+        +rename_chat(chat_id: str, new_title: str) bool
+        +delete_chat(chat_id: str) bool
+        +export_chat(chat_id: str, format: str) Any
     }
 
     %% Shared Components
@@ -62,6 +72,9 @@ classDiagram
     Orchestrator --> VectorStore : uses
     Orchestrator --> PromptBuilder : uses
     Orchestrator --> Generator : uses
+    Orchestrator --> ChatHistoryManager : uses
+
+    PromptBuilder --> ChatHistoryManager : uses history from
 
     Logger <.. IngestionPipeline : logs
     Logger <.. Orchestrator : logs
@@ -72,8 +85,10 @@ classDiagram
     Logger <.. Validator : logs
     Logger <.. PromptBuilder : logs
     Logger <.. Generator : logs
+    Logger <.. ChatHistoryManager : logs
 
     %% Comments
     note for IngestionPipeline "Coordinates ingestion components and manages scheduling."
     note for Orchestrator "Manages the query workflow from validation to response generation."
     note for ingestor_state "Database table for tracking ingestion progress."
+    note for ChatHistoryManager "Manages persistent chat sessions and message history."
