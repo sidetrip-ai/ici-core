@@ -13,6 +13,15 @@ from ici.adapters.embedders import SentenceTransformerEmbedder
 # Import preprocessor implementations
 from ici.adapters.preprocessors import TelegramPreprocessor
 
+# Import chat history implementations
+from ici.adapters.chat import JSONChatHistoryManager
+
+# Import user ID generator implementations
+from ici.adapters.user_id import DefaultUserIDGenerator
+
+# Import orchestrator implementations
+from ici.adapters.orchestrators import TelegramOrchestrator
+
 # Export all implementations
 __all__ = [
     # Logger implementations
@@ -23,4 +32,13 @@ __all__ = [
     
     # Preprocessor implementations
     "TelegramPreprocessor",
+    
+    # Chat history implementations
+    "JSONChatHistoryManager",
+    
+    # User ID generator implementations
+    "DefaultUserIDGenerator",
+    
+    # Orchestrator implementations
+    "TelegramOrchestrator",
 ]

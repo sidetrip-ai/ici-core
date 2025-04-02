@@ -102,6 +102,39 @@ class OrchestratorError(QueryError):
     pass
 
 
+# Chat History Errors
+
+
+class ChatError(ICIError):
+    """Base exception for all chat-related errors."""
+
+    pass
+
+
+class ChatHistoryError(ChatError):
+    """Raised when chat history operations fail."""
+
+    pass
+
+
+class ChatIDError(ChatError):
+    """Raised when a chat ID is invalid or not found."""
+
+    pass
+
+
+class ChatStorageError(ChatError):
+    """Raised when chat storage operations fail."""
+
+    pass
+
+
+class UserIDError(ICIError):
+    """Raised when user ID generation or validation fails."""
+
+    pass
+
+
 # Other Errors
 
 
@@ -140,6 +173,11 @@ __all__ = [
     "PromptBuilderError",
     "GenerationError",
     "OrchestratorError",
+    "ChatError",
+    "ChatHistoryError",
+    "ChatIDError",
+    "ChatStorageError",
+    "UserIDError",
     "ConfigurationError",
     "LoggerError",
     "ComponentLoadError"

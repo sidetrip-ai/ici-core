@@ -219,9 +219,12 @@ class StructuredLogger(Logger):
             return json_str
 
         except Exception as e:
+            print(log_data)
+            print(level)
             # Fallback if formatting fails
             error = f"ERROR formatting log: {str(e)}"
             print(error, file=sys.stderr)
+            print(e)
             return json.dumps(
                 {
                     "timestamp": datetime.now().isoformat(),

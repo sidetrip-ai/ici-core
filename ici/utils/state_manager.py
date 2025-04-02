@@ -9,10 +9,12 @@ import os
 import json
 import sqlite3
 import threading
+import logging  # Temporary standard logging for initialization
 from typing import Dict, Any, List, Optional
 from datetime import datetime
 
-from ici.adapters.loggers import StructuredLogger
+# Remove the import that causes circular dependency
+# from ici.adapters.loggers import StructuredLogger
 from ici.utils.datetime_utils import from_timestamp, ensure_tz_aware
 
 
@@ -34,7 +36,9 @@ class StateManager:
             logger_name: Name for the logger
         """
         self.db_path = db_path
-        self.logger = StructuredLogger(name=logger_name)
+        self.logger_name = logger_name  # Store the name for later logger initialization
+        # Use a basic logger initially, will be replaced with StructuredLogger
+        self.logger = logging.getLogger(logger_name)
         self._local = threading.local()
         self._initialized = False
     
@@ -75,6 +79,10 @@ class StateManager:
             Exception: If database initialization fails
         """
         try:
+            # Initialize the structured logger only when needed (lazy import)
+            from ici.adapters.loggers import StructuredLogger
+            self.logger = StructuredLogger(name=self.logger_name)
+            
             # Ensure directory exists
             db_dir = os.path.dirname(self.db_path)
             if db_dir and not os.path.exists(db_dir):

@@ -1,0 +1,71 @@
+classDiagram
+    class User {
+        +user_id: string
+        +source: string
+        +identifier: string
+    }
+
+    class Chat {
+        +chat_id: string
+        +user_id: string
+        +title: string
+        +created_at: datetime
+        +updated_at: datetime
+        +message_count: int
+        +is_pinned: bool
+        +last_message_preview: string
+    }
+
+    class Message {
+        +message_id: string
+        +chat_id: string
+        +role: string
+        +content: string
+        +created_at: datetime
+        +metadata: Dict
+    }
+
+    class ChatHistoryManager {
+        +create_chat(user_id: str) str
+        +add_message(chat_id: str, content: str, role: str, metadata: Dict) str
+        +get_messages(chat_id: str, limit: int) List[Dict]
+        +list_chats(user_id: str) List[Dict]
+        +generate_title(chat_id: str) Optional[str]
+        +rename_chat(chat_id: str, new_title: str) bool
+        +delete_chat(chat_id: str) bool
+        +export_chat(chat_id: str, format: str) Any
+    }
+
+    class JSONStorage {
+        -base_path: str
+        +save_chat(chat: Chat) None
+        +save_message(message: Message) None
+        +load_chat(chat_id: str) Chat
+        +load_messages(chat_id: str) List[Message]
+        +list_user_chats(user_id: str) List[Chat]
+        +delete_chat(chat_id: str) bool
+    }
+
+    class DatabaseStorage {
+        -conn: Connection
+        +save_chat(chat: Chat) None
+        +save_message(message: Message) None
+        +load_chat(chat_id: str) Chat
+        +load_messages(chat_id: str) List[Message]
+        +list_user_chats(user_id: str) List[Chat]
+        +delete_chat(chat_id: str) bool
+    }
+
+    User "1" --> "many" Chat : has
+    Chat "1" --> "many" Message : contains
+    ChatHistoryManager --> JSONStorage : uses
+    ChatHistoryManager --> DatabaseStorage : uses
+    
+    note for User "Represents a user with a unique composite ID"
+    note for Chat "Represents a single conversation thread"
+    note for Message "Individual message in a chat session"
+    note for JSONStorage "Stores chats as JSON files in directory structure"
+    note for DatabaseStorage "Stores chats in database tables (alternative)"
+
+    %% Example file storage structure
+    note "JSON Storage Example:\n./chats/{user_id}/{chat_id}.json" as Note1 
