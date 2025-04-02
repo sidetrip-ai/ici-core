@@ -110,7 +110,7 @@ async def command_line_controller():
                     # Set source to COMMAND_LINE and user_id to admin
                     additional_info = {"session_id": "cli-session"}
                     response = await orchestrator.process_query(
-                        source="COMMAND_LINE",
+                        source="cli",
                         user_id="admin",
                         query=user_input,
                         additional_info=additional_info

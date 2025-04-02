@@ -28,18 +28,19 @@ This document outlines the functional requirements for the Intelligent Conscious
 - FR-2.8: The system shall enforce a standardized dictionary format with 'text' and 'metadata' fields for all processed documents.
 
 ### 2.3 Query Processing
-- FR-3.1: The system shall validate user queries against configurable security rules.
+- FR-3.1: The system shall validate user queries against configurable security rules, potentially using chat history context if configured.
 - FR-3.2: The system shall convert user queries into vector embeddings for similarity search.
 - FR-3.3: The system shall retrieve relevant documents based on vector similarity.
-- FR-3.4: The system shall construct appropriate prompts incorporating retrieved context.
-- FR-3.5: The system shall generate contextually relevant responses using configured AI models.
-- FR-3.6: The system shall handle edge cases such as no relevant documents being found.
-- FR-3.7: The system shall support configurable prompt templates for different use cases.
-- FR-3.8: The system shall provide fallback prompts when no relevant context is available.
-- FR-3.9: The system shall support complex metadata filtering with comparison operations (e.g., greater than, less than).
+- FR-3.4: The system shall construct appropriate prompts incorporating the user query, retrieved documents, and relevant chat history.
+- FR-3.5: The system shall generate contextually relevant responses using configured AI models, maintaining conversational context from chat history.
+- FR-3.6: The system shall handle edge cases such as no relevant documents being found or empty chat history.
+- FR-3.7: The system shall support configurable prompt templates for different use cases, allowing inclusion of chat history.
+- FR-3.8: The system shall provide fallback prompts when no relevant context (documents or history) is available.
+- FR-3.9: The system shall support complex metadata filtering with comparison operations (e.g., greater than, less than) for document retrieval.
 - FR-3.10: The system shall dynamically retrieve validation rules at runtime based on user ID.
 - FR-3.11: The system shall build user-specific context for validation at runtime.
 - FR-3.12: The system shall apply user-specific filters when retrieving documents from the vector store.
+- FR-3.13: The system shall determine the target chat session (`chat_id`) for an incoming user query, either by using an explicitly provided ID, defaulting to the most recent, or creating a new chat session.
 
 ### 2.4 Orchestration
 - FR-4.1: The system shall coordinate all components in the query pipeline from input to output.
@@ -65,6 +66,59 @@ This document outlines the functional requirements for the Intelligent Conscious
 - FR-5.8: The system shall include design rationales for each component interface.
 - FR-5.9: The system shall support multiple language model options (e.g., GPT-4, Grok) with consistent interfaces.
 
+### 2.6 Chat History Management
+- FR-15.1: The system shall allow the creation of new, distinct chat sessions (`chat_id`) associated with a user ID.
+- FR-15.2: The system shall persist chat history, storing user messages and assistant responses for each chat session.
+- FR-15.3: The system shall support multiple storage backends for chat history, including JSON files in a local directory and potentially database options, configurable by the user.
+- FR-15.4: The system shall allow retrieval of messages for a specific chat session, ordered chronologically, with an option to limit the number of recent messages returned.
+- FR-15.5: The system shall provide a mechanism to list all existing chat sessions for a given user ID, ordered by the most recently updated.
+- FR-15.6: The system shall implement functionality to automatically generate a concise title for a chat session based on the initial messages.
+- FR-15.7: The system shall allow users to manually rename the title of a chat session.
+- FR-15.8: The system shall allow users to delete specific chat sessions, removing all associated messages.
+- FR-15.9: The system shall provide a mechanism to export the content of a specific chat session (e.g., in JSON format).
+- FR-15.10: The system shall retrieve and provide relevant chat history context to the PromptBuilder, respecting configured token limits for the language model.
+- FR-15.11: The chat history storage and retrieval mechanisms shall be designed to scale efficiently with a large number of users, chats, and messages.
+
+### 2.7 User Identity Management
+- FR-16.1: The system shall generate or assign a unique user ID (`user_id`) for each distinct user interacting with the system across different interfaces (connectors).
+- FR-16.2: The system shall support a composite user ID structure (e.g., `source:identifier`) to indicate the origin or connector type (e.g., `cli:john`, `telegram:12345`).
+- FR-16.3: A single user ID shall be associated with potentially multiple distinct chat sessions (`chat_id`).
+- FR-16.4: The system shall use the user ID for retrieving user-specific validation rules, context, document filters, and chat history.
+
+### 2.8 Design Principles
+
+#### 2.8.1 Core Design Principles
+- FR-12.1: The system shall follow the principle of modularity with single-purpose, interchangeable components.
+- FR-12.2: The system shall maintain separation of concerns between Ingestion and Query pipelines.
+- FR-12.3: The system shall be designed for scalability to handle growing datasets, user loads, and chat history volume.
+- FR-12.4: The system shall provide flexibility through abstract interfaces and configuration options.
+- FR-12.5: The system shall ensure reliability through proper state persistence, error handling, and logging.
+- FR-12.6: The system shall adhere to Python best practices including type safety and clear interfaces.
+- FR-12.7: The system shall be designed for extensibility to accommodate future technologies and requirements.
+- FR-12.8: The system shall provide design rationales ("Design Choice Thesis") for all architectural decisions.
+- FR-12.9: The system shall ensure consistent embedding logic across ingestion and query pipelines.
+- FR-12.10: The system shall implement step-by-step data flows with explicit state management.
+
+#### 2.8.2 Implementation Guidelines
+- FR-13.1: The system shall utilize shared components between pipelines where appropriate for consistency.
+- FR-13.2: The system shall enforce standardized data formats at each pipeline stage.
+- FR-13.3: The system shall provide clear documentation of design decisions and their rationales.
+- FR-13.4: The system shall implement components with single responsibilities, each with a focused purpose.
+- FR-13.5: The system shall maintain state externally from components to ensure statelessness where beneficial.
+- FR-13.6: The system shall leverage metadata for advanced filtering and privacy controls.
+- FR-13.7: The system shall prioritize security validation before any other query processing.
+- FR-13.8: The system shall support adaptability to different language models without code changes.
+
+#### 2.8.3 System Initialization and Lifecycle
+- FR-14.1: The system shall provide a structured initialization sequence for all components.
+- FR-14.2: The system shall load configuration before initializing any components.
+- FR-14.3: The system shall establish database connections during initialization if applicable.
+- FR-14.4: The system shall initialize shared components before pipeline-specific components.
+- FR-14.5: The system shall start the ingestion pipeline in a separate thread or process if configured for background operation.
+- FR-14.6: The system shall ensure the query pipeline is ready before accepting user queries.
+- FR-14.7: The system shall support graceful shutdown, completing in-progress operations.
+- FR-14.8: The system shall verify component dependencies during initialization.
+
 ## 3. Security and Privacy
 
 ### 3.1 Security Requirements
@@ -82,21 +136,22 @@ This document outlines the functional requirements for the Intelligent Conscious
 - FR-6.12: The system shall implement a typed exception hierarchy for precise error handling.
 
 ### 3.2 Privacy Requirements
-- FR-7.1: The system shall store only necessary data as configured by the user.
-- FR-7.2: The system shall respect data retention policies defined in configuration.
-- FR-7.3: The system shall provide mechanisms to delete stored data on request.
-- FR-7.4: The system shall offer transparency about what data is stored and how it's used.
-- FR-7.5: The system shall handle sensitive information according to configurable privacy policies.
+- FR-7.1: The system shall store only necessary data as configured by the user, including chat history messages.
+- FR-7.2: The system shall respect data retention policies defined in configuration, applying them to both ingested documents and stored chat history.
+- FR-7.3: The system shall provide mechanisms to delete stored data on request, including specific chat sessions or all data associated with a user ID.
+- FR-7.4: The system shall offer transparency about what data is stored (including chat history) and how it's used.
+- FR-7.5: The system shall handle sensitive information within chat history according to configurable privacy policies.
 - FR-7.6: The system shall support metadata filtering to control data retrieval based on privacy considerations.
 - FR-7.7: The system shall enable time-based filtering of data via metadata.
+- FR-7.8: The system shall ensure chat history is stored securely, protecting against unauthorized access.
 
 ## 4. Configuration and Customization
 
 ### 4.1 System Configuration
 - FR-8.1: The system shall be configurable via a YAML configuration file.
-- FR-8.2: The system shall support configuration of all pipeline components.
+- FR-8.2: The system shall support configuration of all pipeline components, including the ChatHistoryManager.
 - FR-8.3: The system shall allow specification of model parameters for AI generation.
-- FR-8.4: The system shall support configuration of database connection details.
+- FR-8.4: The system shall support configuration of database connection details if applicable.
 - FR-8.5: The system shall persist configuration settings across system restarts.
 - FR-8.6: The system shall support configuration of ingestion schedules and intervals.
 - FR-8.7: The system shall provide reasonable default values for optional configuration settings.
@@ -107,6 +162,7 @@ This document outlines the functional requirements for the Intelligent Conscious
 - FR-8.12: The system shall support configuration of rules sources and context filters.
 - FR-8.13: The system shall allow configuration of retry mechanisms and backoff parameters.
 - FR-8.14: The system shall support configuration of fallback templates for prompt building.
+- FR-8.15: The system shall allow configuration of the ChatHistoryManager, including storage type (e.g., 'json', 'database'), storage path (for JSON), message limits, and retention policies.
 
 ### 4.2 Pipeline Customization
 - FR-9.1: The system shall allow customization of the prompt template for generation.
@@ -179,3 +235,4 @@ This document outlines the functional requirements for the Intelligent Conscious
 - FR-14.6: The system shall ensure the query pipeline is ready before accepting user queries.
 - FR-14.7: The system shall support graceful shutdown, completing in-progress operations.
 - FR-14.8: The system shall verify component dependencies during initialization.
+

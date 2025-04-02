@@ -1,6 +1,7 @@
 sequenceDiagram
     participant User
     participant Orchestrator
+    participant ChatHistoryManager
     participant Validator
     participant Embedder
     participant VectorStore
@@ -8,22 +9,47 @@ sequenceDiagram
     participant Generator
     participant Logger
 
-    User->>Orchestrator: process_query(input, user_id)
+    User->>Orchestrator: process_query(user_id, input, chat_id?)
+    
+    alt chat_id is None
+        Orchestrator->>ChatHistoryManager: create_chat(user_id)
+        ChatHistoryManager-->>Orchestrator: new_chat_id
+    else
+        Note over Orchestrator: Use provided chat_id
+    end
+    
     Orchestrator->>Orchestrator: get_rules(user_id)
     Orchestrator->>Orchestrator: build_context(user_id)
     Orchestrator->>Validator: validate(input, context, rules)
     Validator-->>Orchestrator: validation_result
+    
     alt validation_result == True
+        Orchestrator->>ChatHistoryManager: get_messages(chat_id, limit)
+        ChatHistoryManager-->>Orchestrator: chat_history
+        
         Orchestrator->>Embedder: embed(input)
         Embedder-->>Orchestrator: query_vector
-        Orchestrator->>VectorStore: search(query_vector, num_results, filters={'user_id': user_id})
+        
+        Orchestrator->>VectorStore: search(query_vector, num_results, filters)
         VectorStore-->>Orchestrator: documents
-        Orchestrator->>PromptBuilder: build_prompt(input, documents)
+        
+        Orchestrator->>PromptBuilder: build_prompt(input, documents, chat_history)
         PromptBuilder-->>Orchestrator: prompt
+        
         Orchestrator->>Generator: generate(prompt)
-        Generator-->>Orchestrator: output
-        Orchestrator-->>User: output
+        Generator-->>Orchestrator: response
+        
+        Orchestrator->>ChatHistoryManager: add_message(chat_id, input, "user")
+        Orchestrator->>ChatHistoryManager: add_message(chat_id, response, "assistant")
+        
+        alt New or short chat
+            Orchestrator->>ChatHistoryManager: generate_title(chat_id)
+            ChatHistoryManager-->>Orchestrator: title
+        end
+        
+        Orchestrator-->>User: {"response": response, "chat_id": chat_id}
     else
-        Orchestrator-->>User: "Access denied"
+        Orchestrator-->>User: {"error": "Access denied"}
     end
+    
     Orchestrator->>Logger: Log query processing

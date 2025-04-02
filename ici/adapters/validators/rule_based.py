@@ -101,7 +101,7 @@ class RuleBasedValidator(Validator):
             # Check if source is COMMAND_LINE
             source = context.get("source", "")
             
-            if source != "COMMAND_LINE":
+            if source != "cli":
                 failure_reasons.append(f"Input is not from COMMAND_LINE, source: {source}")
                 self.logger.info({
                     "action": "VALIDATOR_FAILED",

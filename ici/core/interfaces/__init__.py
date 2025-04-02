@@ -8,6 +8,8 @@ from ici.core.interfaces.generator import Generator
 from ici.core.interfaces.orchestrator import Orchestrator
 from ici.core.interfaces.pipeline import IngestionPipeline
 from ici.core.interfaces.logger import Logger
+from ici.core.interfaces.chat_history_manager import ChatHistoryManager
+from ici.core.interfaces.user_id_generator import UserIDGenerator
 
 __all__ = [
     "Ingestor",
@@ -20,4 +22,6 @@ __all__ = [
     "Orchestrator",
     "IngestionPipeline",
     "Logger",
+    "ChatHistoryManager",
+    "UserIDGenerator",
 ]
