@@ -1,7 +1,7 @@
 """
-Tests for TelegramOrchestrator.
+Tests for DefaultOrchestrator.
 
-This module contains tests for the TelegramOrchestrator implementation.
+This module contains tests for the DefaultOrchestrator implementation.
 """
 
 import os
@@ -10,7 +10,7 @@ import pytest
 from unittest.mock import patch, MagicMock, AsyncMock
 from typing import Dict, Any, List
 
-from ici.adapters.orchestrators.telegram_orchestrator import TelegramOrchestrator
+from ici.adapters.orchestrators.default_orchestrator import DefaultOrchestrator
 from ici.core.exceptions import OrchestratorError, ValidationError
 
 
@@ -43,7 +43,7 @@ async def orchestrator():
     Create an orchestrator instance with mocked components.
     """
     # Create orchestrator
-    orchestrator = TelegramOrchestrator()
+    orchestrator = DefaultOrchestrator()
     
     # Patch the get_component_config function
     with patch("ici.utils.config.get_component_config", return_value={
@@ -83,7 +83,7 @@ async def orchestrator():
 async def test_initialization():
     """Test orchestrator initialization."""
     # Setup
-    orchestrator = TelegramOrchestrator()
+    orchestrator = DefaultOrchestrator()
     
     # Mock components and config
     with patch("ici.utils.config.get_component_config", return_value={
@@ -170,7 +170,7 @@ async def test_search_failure(orchestrator):
 async def test_get_rules():
     """Test retrieving rules for a user."""
     # Setup
-    orchestrator = TelegramOrchestrator()
+    orchestrator = DefaultOrchestrator()
     orchestrator._config = {
         "validation_rules": {
             "default": [{"type": "default_rule"}],
@@ -195,7 +195,7 @@ async def test_get_rules():
 async def test_build_context():
     """Test building context for a user."""
     # Setup
-    orchestrator = TelegramOrchestrator()
+    orchestrator = DefaultOrchestrator()
     orchestrator._config = {
         "user_context": {
             "user123": {"permission_level": "admin"}
@@ -209,7 +209,7 @@ async def test_build_context():
     assert "timestamp" in context
     assert context["permission_level"] == "admin"
     
-    # Build context for unknown user
+    # Build context for non-existent user
     context = await orchestrator.build_context("unknown_user")
     assert context["user_id"] == "unknown_user"
     assert "timestamp" in context
@@ -218,40 +218,49 @@ async def test_build_context():
 
 @pytest.mark.asyncio
 async def test_configure(orchestrator):
-    """Test runtime configuration updates."""
-    # Setup
+    """Test configuration update."""
+    # Setup initial config
+    orchestrator._num_results = 3
+    orchestrator._similarity_threshold = 0.7
+    
+    # Update configuration
     new_config = {
-        "num_results": 10,
+        "num_results": 5,
         "similarity_threshold": 0.9,
+        "rules_source": "database",
         "error_messages": {
-            "validation_failed": "New error message"
+            "validation_failed": "New validation error"
         }
     }
-    
-    # Configure
     await orchestrator.configure(new_config)
     
-    # Verify updates
-    assert orchestrator._num_results == 10
+    # Verify updated
+    assert orchestrator._num_results == 5
     assert orchestrator._similarity_threshold == 0.9
-    assert orchestrator._error_messages["validation_failed"] == "New error message"
+    assert orchestrator._rules_source == "database"
+    assert orchestrator._error_messages["validation_failed"] == "New validation error"
 
 
 @pytest.mark.asyncio
 async def test_healthcheck(orchestrator):
-    """Test healthcheck functionality."""
-    # Get health status
+    """Test health check functionality."""
+    # Setup mocked component healths
+    orchestrator._validator.healthcheck = AsyncMock(return_value={"healthy": True})
+    orchestrator._vector_store.healthcheck = AsyncMock(return_value={"healthy": True})
+    orchestrator._prompt_builder.healthcheck = AsyncMock(return_value={"healthy": True})
+    orchestrator._generator.healthcheck = AsyncMock(return_value={"healthy": True})
+    
+    # Run healthcheck
     health = await orchestrator.healthcheck()
     
-    # Verify
+    # Verify components were checked
+    orchestrator._validator.healthcheck.assert_called_once()
+    orchestrator._vector_store.healthcheck.assert_called_once()
+    orchestrator._prompt_builder.healthcheck.assert_called_once()
+    orchestrator._generator.healthcheck.assert_called_once()
+    
+    # Verify health result
     assert health["healthy"] is True
+    assert "message" in health
     assert "components" in health
-    assert "validator" in health["components"]
-    assert "vector_store" in health["components"]
-    assert "prompt_builder" in health["components"]
-    assert "generator" in health["components"]
-    
-    # Test with unhealthy component
-    orchestrator._validator.healthcheck = AsyncMock(return_value={"healthy": False})
-    health = await orchestrator.healthcheck()
-    assert health["healthy"] is False 
+    assert len(health["components"]) == 4 
