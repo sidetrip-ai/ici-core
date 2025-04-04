@@ -184,7 +184,7 @@ class TelegramPreprocessor(Preprocessor):
             })
             raise PreprocessorError(f"Message processing failed: {str(e)}") from e
     
-    def preprocess(self, raw_data: Any) -> List[Dict[str, Any]]:
+    async def preprocess(self, raw_data: Any) -> List[Dict[str, Any]]:
         """
         Transform raw Telegram data into standardized documents.
         
@@ -216,24 +216,8 @@ class TelegramPreprocessor(Preprocessor):
                 })
                 return []
             
-            # Check if we're inside an event loop
-            try:
-                loop = asyncio.get_running_loop()
-                # If we're here, we're inside a running event loop
-                self.logger.warning({
-                    "action": "PREPROCESSOR_ASYNC_CONTEXT",
-                    "message": "preprocess called from within a running event loop - using _run_sync_process"
-                })
-                
-                # Use a helper method to run in current event loop
-                return self._run_sync_process(messages)
-            except RuntimeError:
-                # No running event loop, safe to use asyncio.run
-                self.logger.info({
-                    "action": "PREPROCESSOR_SYNC_CONTEXT",
-                    "message": "preprocess called from sync context, using asyncio.run"
-                })
-                return asyncio.run(self.process(messages))
+            # Process messages directly using the async process method
+            return await self.process(messages)
             
         except Exception as e:
             self.logger.error({

@@ -64,3 +64,5 @@ db/
 logs/
 
 **/chats/
+services/**/data/
+services/whatsapp-service/.wwebjs_cache/

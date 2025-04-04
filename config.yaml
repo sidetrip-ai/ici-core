@@ -27,6 +27,10 @@ ingestors:
     phone_number: $TELEGRAM_PHONE_NUMBER
     request_delay: 0.5
     session_string: $TELEGRAM_SESSION_STRING
+  whatsapp:
+    service_url: "http://localhost:3004"
+    session_id: "default_session"
+    request_timeout: 30
 loggers:
   structured_logger:
     console_output: true
@@ -57,12 +61,29 @@ orchestrator:
   validation_rules:
     default: []
 pipelines:
+  default:
+    batch_size: 100
+    schedule:
+      interval_minutes: 15
+    vector_store:
+      collection_name: default_messages
   telegram:
     batch_size: 100
     schedule:
       interval_minutes: 1
+  whatsapp:
+    batch_size: 100
+    schedule:
+      interval_minutes: 5
+    vector_store:
+      collection_name: whatsapp_messages
 preprocessors:
   telegram:
+    chunk_size: 512
+    include_overlap: true
+    max_messages_per_chunk: 10
+    time_window_minutes: 15
+  whatsapp:
     chunk_size: 512
     include_overlap: true
     max_messages_per_chunk: 10
