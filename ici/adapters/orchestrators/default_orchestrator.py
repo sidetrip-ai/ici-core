@@ -137,8 +137,9 @@ class DefaultOrchestrator(Orchestrator):
             self._is_initialized = True
             
             # Start the pipeline if configured to do so
-            pipeline_config = self._config.get("pipeline", {})
-            auto_start = pipeline_config.get("auto_start", True)
+            pipeline_config = self._config.get("pipelines", {})
+            ingestor_id = self._config.get("pipeline", {}).get("ingestor_id", "telegram")
+            auto_start = pipeline_config.get(ingestor_id, {}).get("auto_start", True)
             
             if auto_start and self._pipeline:
                 try:
