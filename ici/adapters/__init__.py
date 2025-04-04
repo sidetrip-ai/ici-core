@@ -20,7 +20,7 @@ from ici.adapters.chat import JSONChatHistoryManager
 from ici.adapters.user_id import DefaultUserIDGenerator
 
 # Import orchestrator implementations
-from ici.adapters.orchestrators import TelegramOrchestrator
+from ici.adapters.orchestrators import DefaultOrchestrator
 
 # Export all implementations
 __all__ = [
@@ -40,5 +40,5 @@ __all__ = [
     "DefaultUserIDGenerator",
     
     # Orchestrator implementations
-    "TelegramOrchestrator",
+    "DefaultOrchestrator",
 ]

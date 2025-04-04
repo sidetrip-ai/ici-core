@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WhatsApp Web Authentication</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            text-align: center;
+        }
+        #qrcode {
+            margin: 20px auto;
+            padding: 20px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            display: inline-block;
+        }
+        #status {
+            margin: 20px 0;
+            padding: 10px;
+            border-radius: 5px;
+        }
+        .connected {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .disconnected {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        .connecting {
+            background-color: #fff3cd;
+            color: #856404;
+        }
+        .hidden {
+            display: none;
+        }
+        button {
+            padding: 10px 15px;
+            border: none;
+            border-radius: 5px;
+            background-color: #007bff;
+            color: white;
+            cursor: pointer;
+            margin: 10px;
+        }
+        button:hover {
+            background-color: #0069d9;
+        }
+    </style>
+</head>
+<body>
+    <h1>WhatsApp Web Authentication</h1>
+    
+    <div id="status" class="disconnected">
+        Status: Disconnected
+    </div>
+    
+    <div id="qrcode" class="hidden">
+        <p>Scan the QR code below with your WhatsApp mobile app</p>
+        <img id="qr-image" src="" alt="WhatsApp QR Code">
+    </div>
+    
+    <div id="connected-info" class="hidden">
+        <p>Successfully connected to WhatsApp Web!</p>
+        <p>You can now close this window and run the ingestion pipeline.</p>
+    </div>
+    
+    <div>
+        <button id="generate-qr">Generate QR Code</button>
+        <button id="check-status">Check Status</button>
+        <button id="logout" class="hidden">Logout</button>
+    </div>
+
+    <script>
+        // Elements
+        const qrcodeDiv = document.getElementById('qrcode');
+        const qrImage = document.getElementById('qr-image');
+        const statusDiv = document.getElementById('status');
+        const connectedInfo = document.getElementById('connected-info');
+        const generateQrBtn = document.getElementById('generate-qr');
+        const checkStatusBtn = document.getElementById('check-status');
+        const logoutBtn = document.getElementById('logout');
+        
+        // API endpoints
+        const API_URL = window.location.origin;
+        const STATUS_ENDPOINT = `${API_URL}/api/status`;
+        const QR_ENDPOINT = `${API_URL}/api/qr`;
+        const LOGOUT_ENDPOINT = `${API_URL}/api/logout`;
+        
+        // Check session status
+        async function checkStatus() {
+            try {
+                const response = await fetch(STATUS_ENDPOINT);
+                const data = await response.json();
+                
+                updateStatus(data.status);
+                
+                if (data.status === 'CONNECTED') {
+                    qrcodeDiv.classList.add('hidden');
+                    connectedInfo.classList.remove('hidden');
+                    generateQrBtn.classList.add('hidden');
+                    logoutBtn.classList.remove('hidden');
+                } else {
+                    connectedInfo.classList.add('hidden');
+                    generateQrBtn.classList.remove('hidden');
+                    
+                    if (data.status === 'DISCONNECTED') {
+                        qrcodeDiv.classList.add('hidden');
+                    }
+                }
+                
+                return data.status;
+            } catch (error) {
+                console.error('Error checking status:', error);
+                updateStatus('ERROR');
+                return 'ERROR';
+            }
+        }
+        
+        // Generate QR code
+        async function generateQR() {
+            try {
+                const response = await fetch(QR_ENDPOINT);
+                
+                if (response.status === 200) {
+                    const blob = await response.blob();
+                    const imageUrl = URL.createObjectURL(blob);
+                    qrImage.src = imageUrl;
+                    qrcodeDiv.classList.remove('hidden');
+                    updateStatus('CONNECTING');
+                    
+                    // Poll for status changes
+                    startStatusPolling();
+                } else {
+                    const data = await response.json();
+                    alert(`Error: ${data.message || 'Failed to generate QR code'}`);
+                }
+            } catch (error) {
+                console.error('Error generating QR:', error);
+                alert('Failed to generate QR code. Please try again.');
+            }
+        }
+        
+        // Logout from WhatsApp
+        async function logout() {
+            try {
+                const response = await fetch(LOGOUT_ENDPOINT, {
+                    method: 'POST'
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    updateStatus('DISCONNECTED');
+                    qrcodeDiv.classList.add('hidden');
+                    connectedInfo.classList.add('hidden');
+                    generateQrBtn.classList.remove('hidden');
+                    logoutBtn.classList.add('hidden');
+                } else {
+                    alert(`Error: ${data.message || 'Failed to logout'}`);
+                }
+            } catch (error) {
+                console.error('Error logging out:', error);
+                alert('Failed to logout. Please try again.');
+            }
+        }
+        
+        // Update status display
+        function updateStatus(status) {
+            statusDiv.className = '';
+            statusDiv.classList.add(status.toLowerCase());
+            
+            let statusText = 'Unknown';
+            
+            switch (status) {
+                case 'CONNECTED':
+                    statusText = 'Connected';
+                    break;
+                case 'DISCONNECTED':
+                    statusText = 'Disconnected';
+                    break;
+                case 'CONNECTING':
+                    statusText = 'Waiting for scan...';
+                    break;
+                case 'ERROR':
+                    statusText = 'Error';
+                    break;
+                default:
+                    statusText = status;
+            }
+            
+            statusDiv.textContent = `Status: ${statusText}`;
+        }
+        
+        // Poll for status changes
+        let pollingInterval = null;
+        
+        function startStatusPolling() {
+            if (pollingInterval) {
+                clearInterval(pollingInterval);
+            }
+            
+            pollingInterval = setInterval(async () => {
+                const status = await checkStatus();
+                
+                if (status === 'CONNECTED') {
+                    clearInterval(pollingInterval);
+                    pollingInterval = null;
+                }
+            }, 2000);
+        }
+        
+        // Event listeners
+        generateQrBtn.addEventListener('click', generateQR);
+        checkStatusBtn.addEventListener('click', checkStatus);
+        logoutBtn.addEventListener('click', logout);
+        
+        // Check status on page load
+        checkStatus();
+    </script>
+</body>
+</html> 

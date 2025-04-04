@@ -1,12 +1,8 @@
 """
-Preprocessor adapters for the ICI framework.
-
-This module contains implementations of the Preprocessor interface for
-different data sources, transforming raw data into a standardized format.
+Preprocessor implementations for various data sources.
 """
 
 from ici.adapters.preprocessors.telegram import TelegramPreprocessor
+from ici.adapters.preprocessors.whatsapp import WhatsAppPreprocessor
 
-__all__ = [
-    "TelegramPreprocessor",
-] 
+__all__ = ["TelegramPreprocessor", "WhatsAppPreprocessor"] 

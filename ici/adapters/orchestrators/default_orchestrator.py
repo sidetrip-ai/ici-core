@@ -1,8 +1,8 @@
 """
-TelegramOrchestrator implementation for the Orchestrator interface.
+DefaultOrchestrator implementation for the Orchestrator interface.
 
 This module provides an implementation of the Orchestrator interface
-that coordinates the processing of Telegram queries through validation,
+that coordinates the processing of queries through validation,
 vector search, prompt building, and response generation.
 """
 
@@ -33,23 +33,23 @@ from ici.adapters.validators.rule_based import RuleBasedValidator
 from ici.adapters.prompt_builders.basic_prompt_builder import BasicPromptBuilder
 from ici.adapters.vector_stores.chroma import ChromaDBStore
 from ici.adapters.embedders.sentence_transformer import SentenceTransformerEmbedder
-from ici.adapters.pipelines.telegram import TelegramIngestionPipeline
+from ici.adapters.pipelines.default import DefaultIngestionPipeline
 from ici.adapters.generators import create_generator
 from ici.adapters.chat import JSONChatHistoryManager
 from ici.adapters.user_id import DefaultUserIDGenerator
 
 
-class TelegramOrchestrator(Orchestrator):
+class DefaultOrchestrator(Orchestrator):
     """
-    Orchestrator implementation for processing Telegram queries.
+    Default Orchestrator implementation for processing queries.
     
-    Coordinates the flow from validation to generation for Telegram messages.
+    Coordinates the flow from validation to generation for messages.
     Supports multi-turn conversations with chat history functionality.
     """
     
     def __init__(self, logger_name: str = "orchestrator"):
         """
-        Initialize the TelegramOrchestrator.
+        Initialize the DefaultOrchestrator.
         
         Args:
             logger_name: Name to use for the logger
@@ -105,7 +105,7 @@ class TelegramOrchestrator(Orchestrator):
         try:
             self.logger.info({
                 "action": "ORCHESTRATOR_INIT_START",
-                "message": "Initializing TelegramOrchestrator"
+                "message": "Initializing DefaultOrchestrator"
             })
             
             # Load orchestrator configuration
@@ -137,12 +137,13 @@ class TelegramOrchestrator(Orchestrator):
             self._is_initialized = True
             
             # Start the pipeline if configured to do so
-            pipeline_config = self._config.get("pipeline", {})
-            auto_start = pipeline_config.get("auto_start", True)
+            pipeline_config = self._config.get("pipelines", {})
+            ingestor_id = self._config.get("pipeline", {}).get("ingestor_id", "telegram")
+            auto_start = pipeline_config.get(ingestor_id, {}).get("auto_start", True)
             
             if auto_start and self._pipeline:
                 try:
-                    print("Fetching recent 100 messages from telegram...")
+                    print("Fetching recent initial data (can take a while)...")
                     await self._pipeline.start()
                     print("Pipeline stored data successfully")
                     self.logger.info({
@@ -158,7 +159,7 @@ class TelegramOrchestrator(Orchestrator):
             
             self.logger.info({
                 "action": "ORCHESTRATOR_INIT_SUCCESS",
-                "message": "TelegramOrchestrator initialized successfully",
+                "message": "DefaultOrchestrator initialized successfully",
                 "data": {
                     "num_results": self._num_results,
                     "similarity_threshold": self._similarity_threshold
@@ -257,7 +258,7 @@ class TelegramOrchestrator(Orchestrator):
             
             # Initialize ingestion pipeline
             print("Initializing ingestion pipeline...")
-            self._pipeline = TelegramIngestionPipeline(logger_name="orchestrator.pipeline")
+            self._pipeline = DefaultIngestionPipeline(logger_name="orchestrator.pipeline")
             await self._pipeline.initialize()
             
             self.logger.info({
