@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Main entry point for the ICI application.
+Command-line controller for running the orchestrator.
 
 This script initializes and runs the DefaultOrchestrator,
 providing a command-line interface for interacting with it.
@@ -34,7 +34,6 @@ except ImportError as e:
     traceback.print_exc()
     sys.exit(1)
 
-
 async def command_line_controller():
     """
     Initialize the DefaultOrchestrator and provide a CLI interface.
@@ -49,10 +48,9 @@ async def command_line_controller():
         return 1
     
     try:
-        # Initialize the orchestrator
-        print("About to initialize the orchestrator...")
+        print("Initializing orchestrator components...")
         await orchestrator.initialize()
-        print("Orchestrator initialized successfully!")
+        print("Orchestrator initialized successfully.")
         
         # Cross-platform signal handling
         loop = asyncio.get_running_loop()
@@ -133,7 +131,7 @@ async def command_line_controller():
         print(f"Error initializing orchestrator: {str(e)}")
         traceback.print_exc()
         return 1
-    
+
     return 0
 
 
