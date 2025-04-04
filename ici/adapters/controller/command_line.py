@@ -2,7 +2,7 @@
 """
 Main entry point for the ICI application.
 
-This script initializes and runs the TelegramOrchestrator,
+This script initializes and runs the DefaultOrchestrator,
 providing a command-line interface for interacting with it.
 """
 
@@ -27,24 +27,24 @@ except ImportError as e:
     print(f"Warning: Could not load environment variables: {e}")
 
 try:
-    from ici.adapters.orchestrators.telegram_orchestrator import TelegramOrchestrator
-    # print("Successfully imported TelegramOrchestrator")
+    from ici.adapters.orchestrators import DefaultOrchestrator
+    # print("Successfully imported DefaultOrchestrator")
 except ImportError as e:
-    print(f"Error importing TelegramOrchestrator: {e}")
+    print(f"Error importing DefaultOrchestrator: {e}")
     traceback.print_exc()
     sys.exit(1)
 
 
 async def command_line_controller():
     """
-    Initialize the TelegramOrchestrator and provide a CLI interface.
+    Initialize the DefaultOrchestrator and provide a CLI interface.
     """
-    print("Initializing TelegramOrchestrator...")
+    print("Initializing DefaultOrchestrator...")
     try:
-        orchestrator = TelegramOrchestrator()
-        # print("Created TelegramOrchestrator instance")
+        orchestrator = DefaultOrchestrator()
+        # print("Created DefaultOrchestrator instance")
     except Exception as e:
-        print(f"Error creating TelegramOrchestrator: {e}")
+        print(f"Error creating DefaultOrchestrator: {e}")
         traceback.print_exc()
         return 1
     
@@ -137,7 +137,7 @@ async def command_line_controller():
     return 0
 
 
-async def shutdown(orchestrator: TelegramOrchestrator):
+async def shutdown(orchestrator: DefaultOrchestrator):
     """
     Handle graceful shutdown of the application.
     """
