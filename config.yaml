@@ -1,120 +1,121 @@
-embedders:
-  sentence_transformer:
-    batch_size: 32
-    device: cpu
-    model_name: all-MiniLM-L6-v2
-generator:
-  api_key: $GENERATOR_API_KEY
-  base_retry_delay: 1
-  chain_type: simple
-  default_options:
-    frequency_penalty: 0.0
-    max_tokens: 1024
-    presence_penalty: 0.0
-    temperature: 0.7
-    top_p: 1.0
-  max_retries: 3
-  memory:
-    k: 5
-    type: buffer
-  model: deepseek/deepseek-chat-v3-0324:free
-  provider: openrouter
-  type: langchain
-ingestors:
-  telegram:
-    api_hash: $TELEGRAM_API_HASH
-    api_id: $TELEGRAM_API_ID
-    phone_number: $TELEGRAM_PHONE_NUMBER
-    request_delay: 0.5
-    session_string: $TELEGRAM_SESSION_STRING
-  whatsapp:
-    service_url: "http://localhost:3004"
-    session_id: "default_session"
-    request_timeout: 30
-loggers:
-  structured_logger:
-    console_output: true
-    level: ERROR
-    log_file: ./logs/structured_logger.log
-    name: structured_logger
-    source_token: $SOURCE_TOKEN
-    host: $INGESTION_HOST
-    use_betterstack: false
+# Core System Configuration
+system:
+  loggers:
+    structured_logger:
+      console_output: true
+      level: ERROR
+      log_file: ./logs/structured_logger.log
+      name: structured_logger
+      source_token: $SOURCE_TOKEN
+      host: $INGESTION_HOST
+      use_betterstack: false
+  state_manager:
+    db_path: ./db/sql/ingestor_state.db
+  validator:
+    allowed_sources:
+      - COMMAND_LINE
+    rules: []
+  chat_history_manager:
+    json:
+      base_path: ./db/chat
+      use_subdirectories: true
+      file_permissions: 0o600
+      default_message_limit: 20
+      max_messages_per_chat: 1000
+  user_id_generator:
+    default:
+      sources:
+        - cli
+        - web
+        - api
+        - test
+      default_identifier: anonymous
+
+# Main Orchestrator Configuration
 orchestrator:
+  # Core orchestrator settings
   error_messages:
-    generation_failed: I'm having trouble generating a response right now. Please
-      try again later.
+    generation_failed: I'm having trouble generating a response right now. Please try again later.
     no_documents: I don't have specific information on that topic yet.
     validation_failed: I'm unable to process your request due to security restrictions.
   generation_options:
     max_tokens: 1024
     temperature: 0.7
   num_results: 5
-  pipeline:
-    auto_start: true
-    ingestor_id: telegram
-  rules_source: config
   similarity_threshold: 0.7
+  rules_source: config
   user_context:
     default:
       permission_level: user
   validation_rules:
     default: []
-pipelines:
-  default:
-    batch_size: 100
-    schedule:
-      interval_minutes: 15
-    vector_store:
-      collection_name: default_messages
-  telegram:
-    batch_size: 100
-    schedule:
-      interval_minutes: 1
-  whatsapp:
-    batch_size: 100
-    schedule:
-      interval_minutes: 5
-    vector_store:
-      collection_name: whatsapp_messages
-preprocessors:
-  telegram:
-    chunk_size: 512
-    include_overlap: true
-    max_messages_per_chunk: 10
-    time_window_minutes: 15
-  whatsapp:
-    chunk_size: 512
-    include_overlap: true
-    max_messages_per_chunk: 10
-    time_window_minutes: 15
-prompt_builder:
-  error_template: 'Unable to process: {error}'
-  fallback_template: 'Answer based on general knowledge: {question}'
-  template: "Context:\n{context}\n\nQuestion: {question}\n\nYour response should be conversational and helpful. Remember to continue from any previous conversation if relevant."
-state_manager:
-  db_path: ./db/sql/ingestor_state.db
-validator:
-  allowed_sources:
-  - COMMAND_LINE
-  rules: []
-vector_stores:
-  chroma:
-    collection_name: telegram_messages
-    embedding_function: sentence_transformer
-    persist_directory: ./db/vector/chroma_db
-chat_history_manager:
-  json:
-    base_path: ./db/chat
-    use_subdirectories: true
-    file_permissions: 0o600
-    default_message_limit: 20
-    max_messages_per_chat: 1000
-user_id_generator:
-  default:
-    sources:
-      - cli
-      - web
-      - api
-      - test
-    default_identifier: anonymous
+  
+  # Components used by orchestrator
+  generator:
+    api_key: $GENERATOR_API_KEY
+    base_retry_delay: 1
+    chain_type: simple
+    default_options:
+      frequency_penalty: 0.0
+      max_tokens: 1024
+      presence_penalty: 0.0
+      temperature: 0.7
+      top_p: 1.0
+    max_retries: 3
+    memory:
+      k: 5
+      type: buffer
+    model: deepseek/deepseek-chat-v3-0324:free
+    provider: openrouter
+    type: langchain
+  
+  embedder:
+    sentence_transformer:
+      batch_size: 32
+      device: cpu
+      model_name: all-MiniLM-L6-v2
+  
+  vector_store:
+    chroma:
+      collection_name: messages
+      embedding_function: sentence_transformer
+      persist_directory: ./db/vector/chroma_db
+  
+  prompt_builder:
+    error_template: 'Unable to process: {error}'
+    fallback_template: 'Answer based on general knowledge: {question}'
+    template: "Context:\n{context}\n\nQuestion: {question}\n\nYour response should be conversational and helpful. Remember to continue from any previous conversation if relevant."
+  
+  # Pipeline configurations
+  pipelines:
+    telegram:
+      batch_size: 100
+      schedule:
+        interval_minutes: 1
+      ingestor:
+        telegram:
+          api_hash: $TELEGRAM_API_HASH
+          api_id: $TELEGRAM_API_ID
+          phone_number: $TELEGRAM_PHONE_NUMBER
+          request_delay: 0.5
+          session_string: $TELEGRAM_SESSION_STRING
+      preprocessor:
+        chunk_size: 512
+        include_overlap: true
+        max_messages_per_chunk: 10
+        time_window_minutes: 15
+    
+    whatsapp:
+      batch_size: 100
+      schedule:
+        interval_minutes: 5
+      ingestor:
+        whatsapp:
+          service_url: "http://localhost:3004"
+          session_id: "default_session"
+          request_timeout: 30
+      preprocessor:
+        chunk_size: 512
+        include_overlap: true
+        max_messages_per_chunk: 10
+        time_window_minutes: 15

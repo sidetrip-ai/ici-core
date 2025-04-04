@@ -127,7 +127,7 @@ class LangchainGenerator(Generator):
                 "message": "Initializing LangchainGenerator"
             })
             
-            # Load generator configuration
+            # Load generator configuration from new path
             generator_config = get_component_config("generator", self._config_path)
             
             # Extract provider type

@@ -121,15 +121,19 @@ class DefaultIngestionPipeline(IngestionPipeline):
             
             # Initialize ingestors based on configuration
             
-            # Check if Telegram is configured
-            telegram_config = get_component_config("ingestors.telegram", self._config_path)
-            if telegram_config:
-                await self._initialize_telegram_ingestor(telegram_config)
+            # For telegram pipeline
+            telegram_pipeline_config = get_component_config("pipelines.telegram", self._config_path)
+            if telegram_pipeline_config:
+                telegram_ingestor_config = get_component_config("pipelines.telegram.ingestor.telegram", self._config_path)
+                if telegram_ingestor_config:
+                    await self._initialize_telegram_ingestor(telegram_ingestor_config)
             
-            # Check if WhatsApp is configured
-            whatsapp_config = get_component_config("ingestors.whatsapp", self._config_path)
-            if whatsapp_config:
-                await self._initialize_whatsapp_ingestor(whatsapp_config)
+            # For whatsapp pipeline
+            whatsapp_pipeline_config = get_component_config("pipelines.whatsapp", self._config_path)
+            if whatsapp_pipeline_config:
+                whatsapp_ingestor_config = get_component_config("pipelines.whatsapp.ingestor.whatsapp", self._config_path)
+                if whatsapp_ingestor_config:
+                    await self._initialize_whatsapp_ingestor(whatsapp_ingestor_config)
             
             self.logger.info({
                 "action": "PIPELINE_INITIALIZED",

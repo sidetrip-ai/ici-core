@@ -106,7 +106,7 @@ class StructuredLogger(Logger):
             LoggerError: If initialization fails for any reason.
         """
         try:
-            # Load logger configuration
+            # Load logger configuration from new path
             logger_config = get_component_config("loggers.structured_logger", self._config_path) or {}
             
             # Get configuration values with defaults from constructor
