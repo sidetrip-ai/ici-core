@@ -280,4 +280,33 @@ async def _load_component(self, component_config, interface_class):
 
 ## Conclusion
 
-By following these guidelines, you can create clear, consistent, and robust configuration schemas for ICI components. This approach ensures that configuration errors are caught early with helpful error messages, making the system more reliable and easier to use. 
+By following these guidelines, you can create clear, consistent, and robust configuration schemas for ICI components. This approach ensures that configuration errors are caught early with helpful error messages, making the system more reliable and easier to use.
+
+## Implementation Plan (Agreed Upon)
+
+Based on recent discussions, the following plan will be followed to implement schema validation, starting with `Ingestor` and `Preprocessor` components:
+
+1.  **Core Schema Infrastructure (`ici/components/schema.py`):**
+    *   Define an Abstract Base Class (ABC) `ComponentConfigSchema` with an abstract method `get_component_schema(self) -> Dict[str, Any]`.
+    *   Define base JSON schemas (as Python dicts) for `Ingestor` (`BASE_INGESTOR_SCHEMA`) and `Preprocessor` (`BASE_PREPROCESSOR_SCHEMA`) interfaces, containing minimal required fields.
+
+2.  **Modify Base Component Classes (`ici/components/base.py`):**
+    *   Make base `Ingestor` and `Preprocessor` classes inherit from `ComponentConfigSchema`.
+    *   Modify their `initialize(self, config: Dict[str, Any])` methods:
+        *   Call `schema = self.get_component_schema()` to get the combined schema from the concrete subclass.
+        *   Validate the input `config` against `schema` using `jsonschema.validate(instance=config, schema=schema)`.
+        *   Wrap validation in `try...except jsonschema.ValidationError as e:`.
+        *   On validation error, log details and raise a custom `ConfigurationValidationError`.
+
+3.  **Implement Schemas in Concrete Components:**
+    *   For each concrete `Ingestor` and `Preprocessor` subclass:
+        *   Implement `get_component_schema(self) -> Dict[str, Any]`.
+        *   The returned schema *must* use `allOf` to combine its specific requirements with the appropriate base schema (`BASE_INGESTOR_SCHEMA` or `BASE_PREPROCESSOR_SCHEMA`).
+
+4.  **Add Dependency:**
+    *   Add `jsonschema` (latest version) to `requirements.txt` and `setup.py` (`install_requires`).
+
+5.  **Custom Exception:**
+    *   Define `ConfigurationValidationError` in a central exceptions module (e.g., `ici/exceptions.py`).
+
+This approach embeds validation within the component's initialization, uses inheritance for schema definition enforcement, and ensures both base and specific configurations are validated. Failed validations will prevent the component from loading. 
