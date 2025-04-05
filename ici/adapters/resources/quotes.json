@@ -1,0 +1,204 @@
+{
+  "data": [
+    {
+      "text": "The wound is the place where the Light enters you.",
+      "author": "Rumi",
+      "category": "hope"
+    },
+    {
+      "text": "In the midst of winter, I found there was, within me, an invincible summer.",
+      "author": "Albert Camus",
+      "category": "hope"
+    },
+    {
+      "text": "Hope is being able to see that there is light despite all of the darkness.",
+      "author": "Desmond Tutu",
+      "category": "hope"
+    },
+    {
+      "text": "Even the darkest night will end and the sun will rise.",
+      "author": "Victor Hugo",
+      "category": "hope"
+    },
+    {
+      "text": "Everything can be taken from a man but one thing: the last of the human freedoms—to choose one's attitude in any given set of circumstances.",
+      "author": "Viktor E. Frankl",
+      "category": "hope"
+    },
+    {
+      "text": "Fall seven times, stand up eight.",
+      "author": "Japanese Proverb",
+      "category": "perseverance"
+    },
+    {
+      "text": "The only way out is through.",
+      "author": "Robert Frost",
+      "category": "perseverance"
+    },
+    {
+      "text": "Difficulties in life are intended to make us better, not bitter.",
+      "author": "Dan Reeves",
+      "category": "perseverance"
+    },
+    {
+      "text": "Courage doesn't always roar. Sometimes courage is the quiet voice at the end of the day saying, I will try again tomorrow.",
+      "author": "Mary Anne Radmacher",
+      "category": "perseverance"
+    },
+    {
+      "text": "Our greatest glory is not in never falling, but in rising every time we fall.",
+      "author": "Confucius",
+      "category": "perseverance"
+    },
+    {
+      "text": "You have within you right now, everything you need to deal with whatever the world can throw at you.",
+      "author": "Brian Tracy",
+      "category": "strength"
+    },
+    {
+      "text": "Strength does not come from physical capacity. It comes from an indomitable will.",
+      "author": "Mahatma Gandhi",
+      "category": "strength"
+    },
+    {
+      "text": "You never know how strong you are until being strong is your only choice.",
+      "author": "Bob Marley",
+      "category": "strength"
+    },
+    {
+      "text": "That which does not kill us makes us stronger.",
+      "author": "Friedrich Nietzsche",
+      "category": "strength"
+    },
+    {
+      "text": "The most beautiful people we have known are those who have known defeat, known suffering, known struggle, known loss, and have found their way out of the depths.",
+      "author": "Elisabeth Kübler-Ross",
+      "category": "strength"
+    },
+    {
+      "text": "The only way to make sense out of change is to plunge into it, move with it, and join the dance.",
+      "author": "Alan Watts",
+      "category": "change"
+    },
+    {
+      "text": "Change is the law of life. And those who look only to the past or present are certain to miss the future.",
+      "author": "John F. Kennedy",
+      "category": "change"
+    },
+    {
+      "text": "Life belongs to the living, and he who lives must be prepared for changes.",
+      "author": "Johann Wolfgang von Goethe",
+      "category": "change"
+    },
+    {
+      "text": "Every day is a chance to begin again. Don't focus on the failures of yesterday, start today with positive thoughts and expectations.",
+      "author": "Catherine Pulsifer",
+      "category": "change"
+    },
+    {
+      "text": "Change will not come if we wait for some other person or some other time. We are the ones we've been waiting for. We are the change that we seek.",
+      "author": "Barack Obama",
+      "category": "change"
+    },
+    {
+      "text": "You are never too old to set another goal or to dream a new dream.",
+      "author": "C.S. Lewis",
+      "category": "self_discovery"
+    },
+    {
+      "text": "What lies behind us and what lies before us are tiny matters compared to what lies within us.",
+      "author": "Ralph Waldo Emerson",
+      "category": "self_discovery"
+    },
+    {
+      "text": "The purpose of life is not to be happy. It is to be useful, to be honorable, to be compassionate, to have it make some difference that you have lived and lived well.",
+      "author": "Ralph Waldo Emerson",
+      "category": "purpose"
+    },
+    {
+      "text": "When we strive to become better than we are, everything around us becomes better too.",
+      "author": "Paulo Coelho",
+      "category": "self_discovery"
+    },
+    {
+      "text": "Be yourself; everyone else is already taken.",
+      "author": "Oscar Wilde",
+      "category": "self_discovery"
+    },
+    {
+      "text": "Happiness can be found, even in the darkest of times, if one only remembers to turn on the light.",
+      "author": "J.K. Rowling",
+      "category": "joy"
+    },
+    {
+      "text": "The greatest glory in living lies not in never falling, but in rising every time we fall.",
+      "author": "Nelson Mandela",
+      "category": "perseverance"
+    },
+    {
+      "text": "The best way to predict your future is to create it.",
+      "author": "Abraham Lincoln",
+      "category": "purpose"
+    },
+    {
+      "text": "Worry does not empty tomorrow of its sorrow, it empties today of its strength.",
+      "author": "Corrie Ten Boom",
+      "category": "mindfulness"
+    },
+    {
+      "text": "When one door of happiness closes, another opens; but often we look so long at the closed door that we do not see the one which has been opened for us.",
+      "author": "Helen Keller",
+      "category": "hope"
+    },
+    {
+      "text": "The most important thing is to enjoy your life—to be happy—it's all that matters.",
+      "author": "Audrey Hepburn",
+      "category": "joy"
+    },
+    {
+      "text": "Instead of worrying about what you cannot control, shift your energy to what you can create.",
+      "author": "Roy T. Bennett",
+      "category": "mindfulness"
+    },
+    {
+      "text": "It is never too late to be what you might have been.",
+      "author": "George Eliot",
+      "category": "hope"
+    },
+    {
+      "text": "Happiness is not something ready-made. It comes from your own actions.",
+      "author": "Dalai Lama",
+      "category": "joy"
+    },
+    {
+      "text": "Yesterday is history, tomorrow is a mystery, today is a gift of God, which is why we call it the present.",
+      "author": "Bil Keane",
+      "category": "mindfulness"
+    },
+    {
+      "text": "Nothing in nature blooms all year. Be patient with yourself.",
+      "author": "Unknown",
+      "category": "self_care"
+    },
+    {
+      "text": "Let everything happen to you: beauty and terror. Just keep going. No feeling is final.",
+      "author": "Rainer Maria Rilke",
+      "category": "perseverance"
+    },
+    {
+      "text": "Don't count the days, make the days count.",
+      "author": "Muhammad Ali",
+      "category": "purpose"
+    },
+    {
+      "text": "Your present circumstances don't determine where you can go; they merely determine where you start.",
+      "author": "Nido Qubein",
+      "category": "hope"
+    },
+    {
+      "text": "It always seems impossible until it's done.",
+      "author": "Nelson Mandela",
+      "category": "perseverance"
+    }
+  ]
+}
