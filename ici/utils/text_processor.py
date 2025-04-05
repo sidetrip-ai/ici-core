@@ -4,13 +4,87 @@ import nltk
 from nltk.tokenize import word_tokenize, sent_tokenize
 from nltk.corpus import stopwords
 from nltk.stem import WordNetLemmatizer
+from pathlib import Path
+import docx
+import PyPDF2
+import chardet
 
 class TextPreprocessor:
     """Text preprocessing utilities for cleaning and normalizing text."""
     
     def __init__(self):
-        self.stop_words = set(stopwords.words('english'))
-        self.lemmatizer = WordNetLemmatizer()
+        """Initialize the text preprocessor with required NLTK data."""
+        try:
+            self.stop_words = set(stopwords.words('english'))
+            self.lemmatizer = WordNetLemmatizer()
+        except LookupError:
+            # Download required NLTK data if not available
+            nltk.download('punkt')
+            nltk.download('stopwords')
+            nltk.download('wordnet')
+            self.stop_words = set(stopwords.words('english'))
+            self.lemmatizer = WordNetLemmatizer()
+    
+    def process_file(self, file_path: str) -> Optional[str]:
+        """
+        Process a file and extract its text content.
+        
+        Args:
+            file_path: Path to the file
+            
+        Returns:
+            Extracted text content or None if extraction fails
+        """
+        try:
+            file_path = Path(file_path)
+            if not file_path.exists():
+                print(f"File not found: {file_path}")
+                return None
+            
+            # Process based on file extension
+            if file_path.suffix.lower() == '.txt':
+                # Try different encodings for text files
+                try:
+                    with open(file_path, 'rb') as f:
+                        raw_data = f.read()
+                        detected = chardet.detect(raw_data)
+                        encoding = detected['encoding']
+                    
+                    with open(file_path, 'r', encoding=encoding) as f:
+                        text = f.read()
+                except Exception:
+                    # Fallback to utf-8
+                    with open(file_path, 'r', encoding='utf-8') as f:
+                        text = f.read()
+                        
+            elif file_path.suffix.lower() == '.docx':
+                doc = docx.Document(file_path)
+                text = '\n'.join([paragraph.text for paragraph in doc.paragraphs])
+                
+            elif file_path.suffix.lower() == '.pdf':
+                with open(file_path, 'rb') as f:
+                    pdf_reader = PyPDF2.PdfReader(f)
+                    text = ''
+                    for page in pdf_reader.pages:
+                        text += page.extract_text() + '\n'
+            else:
+                print(f"Unsupported file type: {file_path.suffix}")
+                return None
+            
+            # Process the extracted text
+            processed_text = self.process_text(
+                text,
+                clean=True,
+                remove_stops=False,  # Keep stopwords for better context
+                lemmatize=False,     # Keep original words for better readability
+                chunk_size=None
+            )
+            
+            return processed_text
+            
+        except Exception as e:
+            print(f"Error processing file {file_path}: {e}")
+            return None
     
     def clean_text(self, text: str) -> str:
         """
@@ -25,9 +99,8 @@ class TextPreprocessor:
         # Convert to lowercase
         text = text.lower()
         
-        # Remove special characters and digits
-        text = re.sub(r'[^\w\s]', ' ', text)
-        text = re.sub(r'\d+', ' ', text)
+        # Remove special characters but keep punctuation
+        text = re.sub(r'[^\w\s.,!?-]', ' ', text)
         
         # Remove extra whitespace
         text = re.sub(r'\s+', ' ', text)
@@ -118,6 +191,9 @@ class TextPreprocessor:
         Returns:
             Processed text (or list of chunks if chunk_size is specified)
         """
+        if not text:
+            return ""
+            
         if clean:
             text = self.clean_text(text)
         
