@@ -31,6 +31,8 @@ class RuleBasedValidator(Validator):
         self.logger = StructuredLogger(name=logger_name)
         self._is_initialized = False
         self._config_path = os.environ.get("ICI_CONFIG_PATH", "config.yaml")
+        self._allowed_sources = []
+        self._rules = []
     
     async def initialize(self) -> None:
         """
@@ -53,11 +55,19 @@ class RuleBasedValidator(Validator):
             # Load validator configuration
             validator_config = get_component_config("validator", self._config_path)
             
+            # Get allowed sources and rules
+            self._allowed_sources = validator_config.get("allowed_sources", ["COMMAND_LINE"])
+            self._rules = validator_config.get("rules", [])
+            
             self._is_initialized = True
             
             self.logger.info({
                 "action": "VALIDATOR_INIT_SUCCESS",
-                "message": "RuleBasedValidator initialized successfully"
+                "message": "RuleBasedValidator initialized successfully",
+                "data": {
+                    "allowed_sources": self._allowed_sources,
+                    "rules": self._rules
+                }
             })
             
         except Exception as e:
@@ -76,16 +86,16 @@ class RuleBasedValidator(Validator):
         failure_reasons: Optional[List[str]] = None
     ) -> bool:
         """
-        Validates if the input is coming from COMMAND_LINE source.
+        Validates the input based on configured rules and context.
         
         Args:
             input: The user input to validate
             context: Runtime data for rule evaluation (e.g., user_id, timestamp, source)
-            rules: List of validation rule dictionaries (not used in this implementation)
+            rules: List of validation rule dictionaries
             failure_reasons: Optional list to populate with reasons for validation failure
             
         Returns:
-            bool: True if input is from COMMAND_LINE source, False otherwise
+            bool: True if input passes all rules, False otherwise
             
         Raises:
             ValidationError: If the validation process itself fails
@@ -98,22 +108,42 @@ class RuleBasedValidator(Validator):
             failure_reasons = []
         
         try:
-            # Check if source is COMMAND_LINE
+            # Get source from context
             source = context.get("source", "")
             
-            if source != "COMMAND_LINE":
-                failure_reasons.append(f"Input is not from COMMAND_LINE, source: {source}")
+            # Check if source is allowed
+            if source not in self._allowed_sources:
+                failure_reasons.append(f"Input source '{source}' is not allowed. Allowed sources: {self._allowed_sources}")
                 self.logger.info({
                     "action": "VALIDATOR_FAILED",
                     "message": "Input source validation failed",
-                    "data": {"source": source}
+                    "data": {"source": source, "allowed_sources": self._allowed_sources}
                 })
                 return False
             
-            # Source is COMMAND_LINE, validation passes
+            # Apply configured rules
+            for rule in self._rules:
+                rule_type = rule.get("type")
+                
+                if rule_type == "source":
+                    allowed_sources = rule.get("allowed", [])
+                    if source not in allowed_sources:
+                        failure_reasons.append(f"Source '{source}' not in allowed sources: {allowed_sources}")
+                        return False
+                
+                elif rule_type == "length":
+                    min_len = rule.get("min", 0)
+                    max_len = rule.get("max", float("inf"))
+                    input_len = len(input)
+                    
+                    if input_len < min_len or input_len > max_len:
+                        failure_reasons.append(f"Input length {input_len} not within allowed range [{min_len}, {max_len}]")
+                        return False
+            
+            # All rules passed
             self.logger.debug({
                 "action": "VALIDATOR_SUCCESS",
-                "message": "Input source validated successfully",
+                "message": "Input validation successful",
                 "data": {"source": source}
             })
             return True

@@ -4,7 +4,7 @@ embedders:
     device: cpu
     model_name: all-MiniLM-L6-v2
 generator:
-  api_key: $GENERATOR_API_KEY
+  api_key: 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
   base_retry_delay: 1
   chain_type: simple
   default_options:
@@ -22,9 +22,9 @@ generator:
   type: langchain
 ingestors:
   telegram:
-    api_hash: $TELEGRAM_API_HASH
-    api_id: $TELEGRAM_API_ID
-    phone_number: $TELEGRAM_PHONE_NUMBER
+    api_hash: c57cd98cfe46a4d3caa37d45f088dbe7
+    api_id: 917904348791
+    phone_number: +917904348791
     request_delay: 0.5
     session_string: $TELEGRAM_SESSION_STRING
 loggers:
@@ -70,15 +70,35 @@ preprocessors:
 prompt_builder:
   error_template: 'Unable to process: {error}'
   fallback_template: 'Answer based on general knowledge: {question}'
-  template: "Context:\n{context}\n\nQuestion: {question}.\n Your tone should be pleasent and friendly"
+  template: "Context:\n{context}\n\nQuestion: {question}\n\nYour response should be conversational and helpful. Remember to continue from any previous conversation if relevant."
 state_manager:
   db_path: ./db/sql/ingestor_state.db
 validator:
   allowed_sources:
-  - COMMAND_LINE
-  rules: []
+    - COMMAND_LINE
+    - web
+  rules:
+    - type: source
+      allowed: [COMMAND_LINE, web]
+    - type: permission_level
+      allowed: [user, admin]
 vector_stores:
   chroma:
     collection_name: telegram_messages
     embedding_function: sentence_transformer
     persist_directory: ./db/vector/chroma_db
+chat_history_manager:
+  json:
+    base_path: ./db/chat
+    use_subdirectories: true
+    file_permissions: 0o600
+    default_message_limit: 20
+    max_messages_per_chat: 1000
+user_id_generator:
+  default:
+    sources:
+      - cli
+      - web
+      - api
+      - test
+    default_identifier: anonymous

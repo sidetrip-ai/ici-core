@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sidetrip Chat</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+    <style>
+        .chat-container {
+            height: calc(100vh - 200px);
+        }
+        .messages-container {
+            height: calc(100% - 60px);
+        }
+        .typing-indicator span {
+            animation: blink 1.4s infinite;
+            animation-fill-mode: both;
+        }
+        .typing-indicator span:nth-child(2) { animation-delay: .2s; }
+        .typing-indicator span:nth-child(3) { animation-delay: .4s; }
+        @keyframes blink {
+            0% { opacity: .2; }
+            20% { opacity: 1; }
+            100% { opacity: .2; }
+        }
+    </style>
+</head>
+<body class="bg-gray-100" x-data="chatApp()">
+    <div class="container mx-auto px-4 py-8">
+        <div class="flex justify-between items-center mb-8">
+            <h1 class="text-3xl font-bold text-gray-800">Sidetrip Chat</h1>
+            <button @click="showSettings = !showSettings" 
+                    class="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">
+                Settings
+            </button>
+        </div>
+
+        <!-- Settings Panel -->
+        <div x-show="showSettings" 
+             class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full"
+             @click.self="showSettings = false">
+            <div class="relative top-20 mx-auto p-5 border w-4/5 shadow-lg rounded-md bg-white">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-xl font-semibold text-gray-700">Configuration</h2>
+                    <button @click="showSettings = false" class="text-gray-500 hover:text-gray-700">
+                        <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                </div>
+
+                <form @submit.prevent="updateConfig" class="space-y-6">
+                    <!-- Generator Settings -->
+                    <div>
+                        <h3 class="text-lg font-medium text-gray-700 mb-3">Generator Settings</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-600">Model</label>
+                                <select x-model="config.generator.model" 
+                                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                                    <template x-for="model in models.generators">
+                                        <option :value="model" x-text="model"></option>
+                                    </template>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-600">Temperature</label>
+                                <input type="number" step="0.1" min="0" max="2" 
+                                       x-model="config.generator.default_options.temperature"
+                                       class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-600">Max Tokens</label>
+                                <input type="number" min="1" max="4096"
+                                       x-model="config.generator.default_options.max_tokens"
+                                       class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-600">Top P</label>
+                                <input type="number" step="0.1" min="0" max="1"
+                                       x-model="config.generator.default_options.top_p"
+                                       class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-600">Frequency Penalty</label>
+                                <input type="number" step="0.1" min="0" max="2"
+                                       x-model="config.generator.default_options.frequency_penalty"
+                                       class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-600">Presence Penalty</label>
+                                <input type="number" step="0.1" min="0" max="2"
+                                       x-model="config.generator.default_options.presence_penalty"
+                                       class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Memory Settings -->
+                    <div>
+                        <h3 class="text-lg font-medium text-gray-700 mb-3">Memory Settings</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-600">Memory Type</label>
+                                <select x-model="config.generator.memory.type"
+                                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                                    <option value="buffer">Buffer</option>
+                                    <option value="summary">Summary</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-600">Memory Size (k)</label>
+                                <input type="number" min="1" max="10"
+                                       x-model="config.generator.memory.k"
+                                       class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- System Prompt -->
+                    <div>
+                        <h3 class="text-lg font-medium text-gray-700 mb-3">System Prompt</h3>
+                        <textarea x-model="config.prompt_builder.template"
+                                  rows="4"
+                                  class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                                  placeholder="Enter system prompt template..."></textarea>
+                    </div>
+
+                    <div class="flex justify-end">
+                        <button type="submit" 
+                                class="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">
+                            Save Configuration
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Chat Interface -->
+        <div class="bg-white rounded-lg shadow-md p-6 chat-container">
+            <!-- Messages -->
+            <div class="messages-container overflow-y-auto mb-4 space-y-4">
+                <template x-for="message in messages" :key="message.timestamp">
+                    <div :class="{'flex justify-end': message.isUser, 'flex justify-start': !message.isUser}">
+                        <div :class="{'bg-indigo-100': !message.isUser, 'bg-indigo-600 text-white': message.isUser}"
+                             class="rounded-lg px-4 py-2 max-w-[70%]">
+                            <p x-text="message.content"></p>
+                            <span class="text-xs opacity-75" x-text="formatTime(message.timestamp)"></span>
+                        </div>
+                    </div>
+                </template>
+                
+                <!-- Typing Indicator -->
+                <div x-show="isTyping" class="flex justify-start">
+                    <div class="bg-gray-100 rounded-lg px-4 py-2">
+                        <div class="typing-indicator">
+                            <span>.</span><span>.</span><span>.</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Input -->
+            <div class="flex space-x-4">
+                <textarea x-model="newMessage" 
+                       @keydown.enter.prevent="sendMessage"
+                       placeholder="Type your message... (Press Enter to send, Shift+Enter for new line)"
+                       rows="1"
+                       class="flex-1 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"></textarea>
+                <button @click="sendMessage"
+                        :disabled="!newMessage.trim() || isTyping"
+                        :class="{'opacity-50 cursor-not-allowed': !newMessage.trim() || isTyping}"
+                        class="bg-indigo-600 text-white px-6 py-2 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">
+                    Send
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function chatApp() {
+            return {
+                showSettings: false,
+                messages: [],
+                newMessage: '',
+                ws: null,
+                config: {{ config | tojson }},
+                models: {{ models | tojson }},
+                isTyping: false,
+
+                init() {
+                    this.connectWebSocket();
+                    this.scrollToBottom();
+                },
+
+                connectWebSocket() {
+                    this.ws = new WebSocket(`ws://${window.location.host}/ws`);
+                    
+                    this.ws.onmessage = (event) => {
+                        const data = JSON.parse(event.data);
+                        if (data.type === 'message') {
+                            this.isTyping = false;
+                            this.messages.push({
+                                content: data.content,
+                                timestamp: data.timestamp,
+                                isUser: false
+                            });
+                            this.scrollToBottom();
+                        } else if (data.type === 'error') {
+                            this.isTyping = false;
+                            alert(data.message);
+                        } else if (data.type === 'config_update') {
+                            alert(data.message);
+                        }
+                    };
+
+                    this.ws.onclose = () => {
+                        setTimeout(() => this.connectWebSocket(), 1000);
+                    };
+                },
+
+                sendMessage() {
+                    if (!this.newMessage.trim() || this.isTyping) return;
+
+                    // Add user message to chat
+                    this.messages.push({
+                        content: this.newMessage,
+                        timestamp: new Date().toISOString(),
+                        isUser: true
+                    });
+
+                    // Show typing indicator
+                    this.isTyping = true;
+
+                    // Send message through WebSocket
+                    this.ws.send(JSON.stringify({
+                        type: 'message',
+                        content: this.newMessage
+                    }));
+
+                    this.newMessage = '';
+                    this.scrollToBottom();
+                },
+
+                async updateConfig() {
+                    this.ws.send(JSON.stringify({
+                        type: 'config_update',
+                        config: this.config
+                    }));
+                },
+
+                formatTime(timestamp) {
+                    return new Date(timestamp).toLocaleTimeString();
+                },
+
+                scrollToBottom() {
+                    const container = document.querySelector('.messages-container');
+                    container.scrollTop = container.scrollHeight;
+                }
+            }
+        }
+    </script>
+</body>
+</html> 
