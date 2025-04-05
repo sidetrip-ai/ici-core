@@ -10,7 +10,7 @@ black>=25.0.1
 sentence-transformers>=3.4.1  # For text embeddings
 torch>=2.2.0  # Required for sentence-transformers
 faiss-cpu>=1.7.0  # For vector similarity search
-telethon>=1.39.0  # For Telegram API access
+telethon>=1.31.1  # For Telegram API access
 chromadb>=0.6.3  # For ChromaDB vector database
 numpy>=2.2.2  # Required for vector operations
 logtail-python>=0.3.3
@@ -20,4 +20,6 @@ langchain-openai>=0.1.0  # For OpenAI integration
 langchain-community>=0.3.20  # For additional model providers (including Ollama)
 langchain-anthropic>=0.3.10  # For Claude models
 langchain-ollama>=0.3.0
-python-dotenv>=1.0.1
+python-dotenv==1.0.0
+nltk==3.8.1
+python-dateutil==2.8.2

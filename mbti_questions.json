@@ -1,0 +1,38 @@
+[
+  {
+    "id": 1,
+    "dimension": "EI",
+    "question": "At a party, do you:",
+    "options": {
+      "A": "Interact with many, including strangers",
+      "B": "Interact with a few, known to you"
+    }
+  },
+  {
+    "id": 2,
+    "dimension": "SN",
+    "question": "Are you more:",
+    "options": {
+      "A": "Realistic than speculative",
+      "B": "Speculative than realistic"
+    }
+  },
+  {
+    "id": 3,
+    "dimension": "TF",
+    "question": "Is it worse to:",
+    "options": {
+      "A": "Have your head in the clouds",
+      "B": "Be in a rut"
+    }
+  },
+  {
+    "id": 4,
+    "dimension": "JP",
+    "question": "Would you rather be considered:",
+    "options": {
+      "A": "A practical person",
+      "B": "An innovative person"
+    }
+  }
+]

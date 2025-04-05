@@ -1,0 +1,61 @@
+{
+  "users": {
+    "475450685": {
+      "analyses": [
+        {
+          "timestamp": "2025-04-05T18:04:10.546261",
+          "analysis": {
+            "sentiment": "neutral",
+            "language_patterns": [],
+            "themes": [],
+            "word_frequency": {
+              "analyze": 1
+            }
+          },
+          "snapshot": "\ud83d\udd0d Personality Snapshot\n\nCommunication Style: Balanced - Adapts style based on context\n\nKey Traits:\nInterests: General Topics\n\n\ud83d\udca1 Tips:\n- Maintain your balanced communication style\n- Continue adapting to different situations"
+        },
+        {
+          "timestamp": "2025-04-05T18:04:35.890543",
+          "analysis": {
+            "sentiment": "neutral",
+            "language_patterns": [],
+            "themes": [],
+            "word_frequency": {
+              "analyze": 2,
+              "start": 1
+            }
+          },
+          "snapshot": "\ud83d\udd0d Personality Snapshot\n\nCommunication Style: Balanced - Adapts style based on context\n\nKey Traits:\nInterests: General Topics\n\n\ud83d\udca1 Tips:\n- Maintain your balanced communication style\n- Continue adapting to different situations"
+        },
+        {
+          "timestamp": "2025-04-05T18:07:00.461482",
+          "analysis": {
+            "sentiment": "neutral",
+            "language_patterns": [],
+            "themes": [],
+            "word_frequency": {
+              "start": 1,
+              "analyze": 1
+            }
+          },
+          "snapshot": "\ud83d\udd0d Personality Snapshot\n\nCommunication Style: Balanced - Adapts style based on context\n\nKey Traits:\nInterests: General Topics\n\n\ud83d\udca1 Tips:\n- Maintain your balanced communication style\n- Continue adapting to different situations"
+        },
+        {
+          "timestamp": "2025-04-05T18:25:02.139877",
+          "analysis": {
+            "sentiment": "neutral",
+            "language_patterns": [],
+            "themes": [],
+            "word_frequency": {
+              "start": 5,
+              "analyze": 2,
+              "mbti": 1
+            }
+          },
+          "snapshot": "\ud83d\udd0d Personality Snapshot\n\nCommunication Style: Balanced - Adapts style based on context\n\nKey Traits:\nInterests: General Topics\n\n\ud83d\udca1 Tips:\n- Maintain your balanced communication style\n- Continue adapting to different situations"
+        }
+      ],
+      "mbti_results": []
+    }
+  }
+}
