@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ICI Document Upload</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <style>
+        .drag-area {
+            border: 2px dashed #4a5568;
+            min-height: 200px;
+            transition: all 0.3s ease;
+        }
+        .drag-area.active {
+            border-color: #4299e1;
+            background-color: #ebf8ff;
+        }
+        .chat-container {
+            max-height: 500px;
+            overflow-y: auto;
+        }
+        .message {
+            margin-bottom: 1rem;
+            padding: 1rem;
+            border-radius: 0.5rem;
+        }
+        .user-message {
+            background-color: #e3f2fd;
+            margin-left: 2rem;
+        }
+        .assistant-message {
+            background-color: #f3f4f6;
+            margin-right: 2rem;
+        }
+        .sources {
+            font-size: 0.875rem;
+            color: #6b7280;
+            margin-top: 0.5rem;
+            padding-top: 0.5rem;
+            border-top: 1px solid #e5e7eb;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <div class="container mx-auto px-4 py-8">
+        <h1 class="text-3xl font-bold text-center mb-8">ICI Document Upload</h1>
+        
+        <!-- Upload Section -->
+        <div class="bg-white rounded-lg shadow-md p-6 mb-8">
+            <h2 class="text-xl font-semibold mb-4">Upload Documents</h2>
+            <div class="drag-area flex flex-col items-center justify-center p-8 rounded-lg mb-4">
+                <svg class="w-16 h-16 text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+                </svg>
+                <p class="text-gray-600 text-center mb-4">Drag & drop files here or click to select</p>
+                <input type="file" id="fileInput" multiple class="hidden">
+                <button onclick="document.getElementById('fileInput').click()" class="bg-blue-500 hover:bg-blue-600 text-white px-6 py-2 rounded-lg transition duration-200">
+                    Select Files
+                </button>
+            </div>
+            <div id="fileList" class="space-y-2"></div>
+            <div id="uploadProgress" class="hidden">
+                <div class="w-full bg-gray-200 rounded-full h-2.5 mt-4">
+                    <div class="bg-blue-500 h-2.5 rounded-full" style="width: 0%"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Chat Section -->
+        <div class="bg-white rounded-lg shadow-md p-6 mb-8">
+            <h2 class="text-xl font-semibold mb-4">Ask Questions</h2>
+            <div class="chat-container mb-4" id="chatContainer">
+                <!-- Chat messages will be added here -->
+            </div>
+            <div class="flex space-x-4">
+                <input type="text" id="questionInput" placeholder="Ask a question about your documents..." 
+                       class="flex-1 border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                       onkeypress="if(event.key === 'Enter') askQuestion()">
+                <button onclick="askQuestion()" class="bg-blue-500 hover:bg-blue-600 text-white px-6 py-2 rounded-lg transition duration-200">
+                    Ask
+                </button>
+            </div>
+        </div>
+
+        <!-- Search Section -->
+        <div class="bg-white rounded-lg shadow-md p-6">
+            <h2 class="text-xl font-semibold mb-4">Search Documents</h2>
+            <div class="flex space-x-4 mb-6">
+                <input type="text" id="searchInput" placeholder="Enter your search query..." 
+                       class="flex-1 border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <button onclick="performSearch()" class="bg-blue-500 hover:bg-blue-600 text-white px-6 py-2 rounded-lg transition duration-200">
+                    Search
+                </button>
+            </div>
+            <div id="searchResults" class="space-y-4"></div>
+        </div>
+    </div>
+
+    <script>
+        // File upload handling
+        const dragArea = document.querySelector('.drag-area');
+        const fileInput = document.getElementById('fileInput');
+        const fileList = document.getElementById('fileList');
+        const uploadProgress = document.getElementById('uploadProgress');
+        const progressBar = uploadProgress.querySelector('div');
+        const chatContainer = document.getElementById('chatContainer');
+
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            dragArea.addEventListener(eventName, preventDefaults, false);
+            document.body.addEventListener(eventName, preventDefaults, false);
+        });
+
+        function preventDefaults(e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+
+        ['dragenter', 'dragover'].forEach(eventName => {
+            dragArea.addEventListener(eventName, highlight, false);
+        });
+
+        ['dragleave', 'drop'].forEach(eventName => {
+            dragArea.addEventListener(eventName, unhighlight, false);
+        });
+
+        function highlight(e) {
+            dragArea.classList.add('active');
+        }
+
+        function unhighlight(e) {
+            dragArea.classList.remove('active');
+        }
+
+        dragArea.addEventListener('drop', handleDrop, false);
+        fileInput.addEventListener('change', handleFiles, false);
+
+        function handleDrop(e) {
+            const dt = e.dataTransfer;
+            const files = dt.files;
+            handleFiles({ target: { files } });
+        }
+
+        function handleFiles(e) {
+            const files = [...e.target.files];
+            uploadFiles(files);
+        }
+
+        async function uploadFiles(files) {
+            const formData = new FormData();
+            files.forEach(file => {
+                formData.append('files', file);
+                displayFile(file);
+            });
+
+            uploadProgress.classList.remove('hidden');
+            progressBar.style.width = '0%';
+
+            try {
+                const response = await fetch('/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await response.json();
+                progressBar.style.width = '100%';
+                
+                // Update file status
+                data.results.forEach(result => {
+                    const fileElement = document.querySelector(`[data-filename="${result.filename}"]`);
+                    if (fileElement) {
+                        const status = fileElement.querySelector('.status');
+                        status.textContent = result.status === 'success' ? '✓' : '✗';
+                        status.className = `status ${result.status === 'success' ? 'text-green-500' : 'text-red-500'}`;
+                        
+                        const message = fileElement.querySelector('.message');
+                        message.textContent = result.message;
+                    }
+                });
+
+            } catch (error) {
+                console.error('Upload failed:', error);
+                progressBar.style.width = '0%';
+            }
+
+            setTimeout(() => {
+                uploadProgress.classList.add('hidden');
+            }, 2000);
+        }
+
+        function displayFile(file) {
+            const div = document.createElement('div');
+            div.className = 'flex items-center space-x-4 text-sm';
+            div.setAttribute('data-filename', file.filename);
+            div.innerHTML = `
+                <span class="status text-gray-400">⋯</span>
+                <span class="flex-1">${file.name}</span>
+                <span class="message text-gray-500"></span>
+            `;
+            fileList.appendChild(div);
+        }
+
+        // Chat functionality
+        async function askQuestion() {
+            const questionInput = document.getElementById('questionInput');
+            const question = questionInput.value.trim();
+            if (!question) return;
+
+            // Display user message
+            addMessage(question, 'user');
+            questionInput.value = '';
+
+            const formData = new FormData();
+            formData.append('question', question);
+
+            try {
+                const response = await fetch('/ask', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await response.json();
+                
+                if (data.error) {
+                    addMessage(`Error: ${data.error}`, 'assistant');
+                } else {
+                    addMessage(data.answer, 'assistant', data.sources);
+                }
+
+            } catch (error) {
+                console.error('Question failed:', error);
+                addMessage('Sorry, an error occurred while processing your question.', 'assistant');
+            }
+        }
+
+        function addMessage(text, type, sources = null) {
+            const div = document.createElement('div');
+            div.className = `message ${type}-message`;
+            
+            let content = `<p>${text}</p>`;
+            if (sources && sources.length > 0) {
+                content += `
+                    <div class="sources">
+                        Sources: ${sources.join(', ')}
+                    </div>
+                `;
+            }
+            
+            div.innerHTML = content;
+            chatContainer.appendChild(div);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        // Search functionality
+        async function performSearch() {
+            const query = document.getElementById('searchInput').value;
+            if (!query.trim()) return;
+
+            const formData = new FormData();
+            formData.append('query', query);
+
+            try {
+                const response = await fetch('/search', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await response.json();
+                displaySearchResults(data.results);
+
+            } catch (error) {
+                console.error('Search failed:', error);
+            }
+        }
+
+        function displaySearchResults(results) {
+            const resultsDiv = document.getElementById('searchResults');
+            resultsDiv.innerHTML = '';
+
+            if (results.length === 0) {
+                resultsDiv.innerHTML = '<p class="text-gray-500">No results found.</p>';
+                return;
+            }
+
+            results.forEach((result, index) => {
+                const div = document.createElement('div');
+                div.className = 'bg-gray-50 rounded-lg p-4';
+                div.innerHTML = `
+                    <div class="flex items-start space-x-2">
+                        <span class="text-gray-400">${index + 1}.</span>
+                        <div class="flex-1">
+                            <p class="font-medium text-gray-900 mb-1">${result.metadata.source}</p>
+                            <p class="text-gray-600">${result.content}</p>
+                            <p class="text-sm text-gray-400 mt-1">Similarity: ${(result.similarity * 100).toFixed(1)}%</p>
+                        </div>
+                    </div>
+                `;
+                resultsDiv.appendChild(div);
+            });
+        }
+
+        // Add enter key handler for question input
+        document.getElementById('questionInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                askQuestion();
+            }
+        });
+    </script>
+</body>
+</html> 
