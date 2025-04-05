@@ -69,6 +69,24 @@ class JSONChatHistoryManager(ChatHistoryManager):
         if not self.initialized:
             raise ChatHistoryError("ChatHistoryManager not initialized. Call initialize() first.")
     
+    def _sanitize_id(self, id_str: str) -> str:
+        """
+        Sanitize an ID for use in file paths by replacing invalid characters.
+        
+        Args:
+            id_str: The ID string to sanitize
+            
+        Returns:
+            str: The sanitized ID string safe for use in file paths
+        """
+        # Replace characters that are invalid in Windows file paths
+        # : < > " / \ | ? * are invalid on Windows
+        invalid_chars = [':', '<', '>', '"', '/', '\\', '|', '?', '*']
+        result = id_str
+        for char in invalid_chars:
+            result = result.replace(char, '_')
+        return result
+
     def _get_chat_path(self, user_id: str, chat_id: str) -> str:
         """
         Get the file path for a specific chat.
@@ -85,12 +103,16 @@ class JSONChatHistoryManager(ChatHistoryManager):
         if not chat_id or not isinstance(chat_id, str):
             raise ChatIDError(f"Invalid chat_id: {chat_id}")
             
+        # Sanitize IDs for file path safety
+        safe_user_id = self._sanitize_id(user_id)
+        safe_chat_id = self._sanitize_id(chat_id)
+            
         if self.use_subdirectories:
-            user_dir = os.path.join(self.base_path, user_id)
+            user_dir = os.path.join(self.base_path, safe_user_id)
             os.makedirs(user_dir, exist_ok=True)
-            return os.path.join(user_dir, f"{chat_id}.json")
+            return os.path.join(user_dir, f"{safe_chat_id}.json")
         else:
-            return os.path.join(self.base_path, f"{user_id}_{chat_id}.json")
+            return os.path.join(self.base_path, f"{safe_user_id}_{safe_chat_id}.json")
     
     def _get_user_dir(self, user_id: str) -> str:
         """
@@ -105,8 +127,11 @@ class JSONChatHistoryManager(ChatHistoryManager):
         if not user_id or not isinstance(user_id, str):
             raise UserIDError(f"Invalid user_id: {user_id}")
             
+        # Sanitize user ID for file path safety
+        safe_user_id = self._sanitize_id(user_id)
+            
         if self.use_subdirectories:
-            user_dir = os.path.join(self.base_path, user_id)
+            user_dir = os.path.join(self.base_path, safe_user_id)
             os.makedirs(user_dir, exist_ok=True)
             return user_dir
         return self.base_path
