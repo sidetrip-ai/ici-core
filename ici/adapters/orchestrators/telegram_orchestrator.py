@@ -142,17 +142,15 @@ class TelegramOrchestrator(Orchestrator):
             
             if auto_start and self._pipeline:
                 try:
-                    print("Fetching recent 100 messages from telegram...")
-                    await self._pipeline.start()
-                    print("Pipeline stored data successfully")
+                    # Skip automatic pipeline start - handled by command line controller
                     self.logger.info({
-                        "action": "ORCHESTRATOR_PIPELINE_STARTED",
-                        "message": "Pipeline started successfully"
+                        "action": "ORCHESTRATOR_PIPELINE_INIT",
+                        "message": "Pipeline initialized successfully"
                     })
                 except Exception as e:
                     self.logger.error({
                         "action": "ORCHESTRATOR_PIPELINE_ERROR",
-                        "message": f"Failed to start pipeline: {str(e)}",
+                        "message": f"Failed to initialize pipeline: {str(e)}",
                         "data": {"error": str(e), "error_type": type(e).__name__}
                     })
             
@@ -308,6 +306,10 @@ class TelegramOrchestrator(Orchestrator):
                         "data": {"user_id": standard_user_id, "command": command}
                     })
                     return await self._commands[command](standard_user_id, query)
+
+            # Check if query suggests creating a poem from chats
+            if "poem" in query.lower() and any(word in query.lower() for word in ["chat", "messages", "conversation"]):
+                return await self._generate_poem_from_chats(standard_user_id)
             
             # Ensure user has an active chat
             chat_id = await self._ensure_active_chat(standard_user_id)
@@ -431,6 +433,131 @@ class TelegramOrchestrator(Orchestrator):
             
             # Return a generic error message
             return self._error_messages.get("generation_failed")
+    
+    async def _generate_poem_from_chats(self, user_id: str) -> str:
+        """
+        Generate a poem from all available chat messages for the user.
+        
+        Args:
+            user_id: The standardized user ID
+            
+        Returns:
+            str: A poem generated from chat content
+        """
+        try:
+            self.logger.info({
+                "action": "ORCHESTRATOR_GENERATE_POEM",
+                "message": "Generating poem from chats",
+                "data": {"user_id": user_id}
+            })
+            
+            # Get all chats for the user
+            chat_list = await self._chat_history_manager.list_chats(user_id)
+            
+            # Collect messages from all chats
+            all_messages = []
+            
+            if chat_list:
+                for chat in chat_list:
+                    chat_id = chat.get("chat_id", "")
+                    if not chat_id:
+                        continue
+                        
+                    messages = await self._chat_history_manager.get_messages(chat_id)
+                    # Filter out system messages
+                    user_messages = [msg.get("content", "") for msg in messages if msg.get("role") != "system"]
+                    all_messages.extend(user_messages)
+            
+            # If we don't have sufficient chat data, create some default themes to inspire the poem
+            if not all_messages or len(" ".join(all_messages)) < 100:
+                # Default themes for generating a meaningful poem when chat data is limited
+                default_content = [
+                    "Digital conversations bridging distances between people",
+                    "Technology connecting us across time and space",
+                    "Messages exchanged, building understanding and knowledge",
+                    "The future of communication and artificial intelligence",
+                    "Human connection in a digital world",
+                    "Words flowing between minds like rivers of thought",
+                    "The beauty of conversation and shared experiences",
+                    "Moments captured in text, preserved in time",
+                    "The evolution of human interaction through technology",
+                    "Silent words speaking volumes through screens"
+                ]
+                all_messages.extend(default_content)
+            
+            # Extract key phrases from messages
+            content = " ".join(all_messages)
+            
+            # Build prompt for poem generation
+            poem_prompt = f"""
+            Create a deep, meaningful poem that captures the essence of human connection and communication.
+            The poem should:
+            - Have at least 4 stanzas with a clear structure
+            - Include vivid imagery and metaphors
+            - Have a thoughtful rhythm and possibly rhyme
+            - Explore themes of connection, technology, and human experience
+            - Be reflective and emotionally resonant
+            
+            If possible, incorporate these elements from the conversation:
+            {content[:1800]}  # Limit to avoid token issues
+            
+            The poem should be profound and meaningful, the kind that makes the reader pause and think.
+            """
+            
+            # Generate the poem with higher temperature for creativity
+            poem = await self._generator.generate(poem_prompt, {
+                "temperature": 0.8,  # More creative
+                "max_tokens": 500    # Allow longer response for poem
+            })
+            
+            # Store the poem in the active chat
+            try:
+                chat_id = await self._ensure_active_chat(user_id)
+                await self._chat_history_manager.add_message(
+                    chat_id=chat_id,
+                    content=poem,
+                    role="assistant"
+                )
+            except Exception as e:
+                # Don't fail the whole operation if we can't store the poem
+                self.logger.warning({
+                    "action": "POEM_STORAGE_ERROR",
+                    "message": f"Could not store poem in chat history: {str(e)}",
+                    "data": {"error": str(e)}
+                })
+            
+            return poem
+            
+        except Exception as e:
+            self.logger.error({
+                "action": "ORCHESTRATOR_POEM_ERROR",
+                "message": f"Failed to generate poem: {str(e)}",
+                "data": {"error": str(e), "error_type": type(e).__name__}
+            })
+            # Even if we encounter an error, try to return something poetic
+            return """
+            Words in Digital Space
+            
+            Through wires and waves, our words take flight,
+            Dancing across the digital night.
+            Each message sent, a thought preserved,
+            In streams of data, carefully served.
+            
+            Technology bridges the human divide,
+            With wisdom and folly both side by side.
+            Our stories connect across time and space,
+            Leaving footprints in this ephemeral place.
+            
+            The tapestry of voices, both distant and near,
+            Weaving patterns of meaning, crystal clear.
+            Through challenges and triumphs, we persist,
+            Our digital conversations continuing to exist.
+            
+            In this moment of connection, we find our way,
+            Through screens that brighten with what we say.
+            Perhaps in these exchanges, something profound,
+            In the echo of our words, meaning is found.
+            """
     
     async def _ensure_valid_user_id(self, source: str, provided_user_id: str) -> str:
         """
@@ -1108,3 +1235,128 @@ class TelegramOrchestrator(Orchestrator):
             })
             
             return health_result 
+    
+    async def _fetch_messages_by_username(self, username: str, limit: int = 100) -> Dict[str, Any]:
+        """
+        Fetch messages from a specific username.
+        
+        Args:
+            username: Username to fetch messages from
+            limit: Maximum number of messages to fetch
+            
+        Returns:
+            Dict[str, Any]: Results of the fetch operation
+        """
+        if not self._pipeline:
+            raise OrchestratorError("Pipeline not initialized")
+        
+        self.logger.info({
+            "action": "FETCH_MESSAGES_START",
+            "message": f"Fetching messages for username: {username}",
+            "data": {"username": username, "limit": limit}
+        })
+        
+        try:
+            # Use the TelegramIngestor from the pipeline
+            ingestor = self._pipeline._ingestor
+            
+            # Create a client and fetch messages
+            async def fetch_operation(client):
+                results = {
+                    "success": False,
+                    "messages_fetched": 0,
+                    "documents_processed": 0
+                }
+                
+                # Find conversations matching the username
+                conversations = await ingestor._get_conversations(client)
+                matched_conversation = None
+                
+                for conversation in conversations:
+                    if conversation["username"] and conversation["username"].lower() == username.lower():
+                        matched_conversation = conversation
+                        break
+                
+                if not matched_conversation:
+                    self.logger.warning({
+                        "action": "USERNAME_NOT_FOUND",
+                        "message": f"Username not found: {username}",
+                        "data": {"username": username}
+                    })
+                    return results
+                
+                # Get messages from this conversation
+                conversation_id = matched_conversation["id"]
+                messages = await ingestor._get_messages(client, conversation_id, limit=limit)
+                
+                # Add conversation metadata to each message
+                for message in messages:
+                    message["conversation_name"] = matched_conversation["name"]
+                    message["conversation_username"] = matched_conversation["username"]
+                    message["source"] = "telegram"
+                
+                # Use the pipeline to process and store messages
+                await self._process_and_store_messages(messages)
+                
+                results["success"] = True
+                results["messages_fetched"] = len(messages)
+                results["documents_processed"] = len(messages)
+                
+                return results
+            
+            # Execute with a fresh client
+            return await ingestor._with_client(fetch_operation)
+            
+        except Exception as e:
+            self.logger.error({
+                "action": "FETCH_MESSAGES_ERROR",
+                "message": f"Failed to fetch messages for username {username}: {str(e)}",
+                "data": {"username": username, "error": str(e), "error_type": type(e).__name__}
+            })
+            raise OrchestratorError(f"Failed to fetch messages: {str(e)}") from e
+    
+    async def _process_and_store_messages(self, messages: List[Dict[str, Any]]) -> None:
+        """
+        Process and store messages using the pipeline components.
+        
+        Args:
+            messages: List of message dictionaries to process and store
+            
+        Returns:
+            None
+        """
+        if not self._pipeline:
+            raise OrchestratorError("Pipeline not initialized")
+        
+        try:
+            # Use pipeline components to process and store messages
+            preprocessor = self._pipeline._preprocessor
+            embedder = self._pipeline._embedder
+            vector_store = self._pipeline._vector_store
+            
+            # Preprocess messages into documents
+            documents = preprocessor.preprocess(messages)
+            
+            # Generate embeddings for documents
+            document_embeddings = await embedder.embed_documents(
+                [doc["content"] for doc in documents]
+            )
+            
+            # Store documents with embeddings
+            document_ids = [doc["id"] for doc in documents]
+            document_metadata = [doc["metadata"] for doc in documents]
+            
+            await vector_store.store(
+                ids=document_ids,
+                embeddings=document_embeddings,
+                documents=[doc["content"] for doc in documents],
+                metadatas=document_metadata
+            )
+            
+        except Exception as e:
+            self.logger.error({
+                "action": "PROCESS_STORE_MESSAGES_ERROR",
+                "message": f"Failed to process and store messages: {str(e)}",
+                "data": {"error": str(e), "error_type": type(e).__name__}
+            })
+            raise OrchestratorError(f"Failed to process and store messages: {str(e)}") from e 
