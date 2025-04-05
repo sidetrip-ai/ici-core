@@ -50,9 +50,6 @@ async def command_line_controller():
     
     try:
         # Initialize the orchestrator
-        print("About to initialize the orchestrator...")
-        await orchestrator.initialize()
-        print("Orchestrator initialized successfully!")
         
         # Cross-platform signal handling
         loop = asyncio.get_running_loop()
@@ -72,9 +69,81 @@ async def command_line_controller():
         print("\nWelcome to the ICI Command Line Interface!")
         print("Type 'exit' or 'quit' to exit, 'help' for commands")
         print("Enter your questions to interact with the system")
+        print("\nWelcome to the ICI Command Line Interface!")
+        print("Please select a character to roleplay as:")
+        print("1. Sherlock Holmes - A brilliant detective with sharp wit")
+        print("2. Elizabeth Bennet - Intelligent and witty")
+        print("3. Gandalf - Wise and powerful wizard")
+        print("4. Custom - Enter your own character")
+        
+        while True:
+            print("\nEnter character number (1-4): ", end="")
+            sys.stdout.flush()
+            choice = await loop.run_in_executor(None, sys.stdin.readline)
+            choice = choice.strip()
+            
+            if choice in ['1', '2', '3', '4']:
+                break
+            print("Invalid choice. Please enter a number between 1 and 4.")
+        
+        # Set character based on selection
+        if choice == '1':
+            character = {
+                "name": "Sherlock Holmes",
+                "personality": "A brilliant detective with sharp wit and keen observation skills",
+                "speaking_style": "Analytical, precise, and often uses deductive reasoning"
+            }
+        elif choice == '2':
+            character = {
+                "name": "Elizabeth Bennet",
+                "personality": "Intelligent, witty, and independent-minded",
+                "speaking_style": "Elegant, sometimes sarcastic, and very articulate"
+            }
+        elif choice == '3':
+            character = {
+                "name": "Gandalf",
+                "personality": "A wise and powerful wizard with deep knowledge",
+                "speaking_style": "Mysterious, profound, and often speaks in riddles"
+            }
+        else:  # Custom character
+            print("\nEnter your character's name: ", end="")
+            sys.stdout.flush()
+            name = await loop.run_in_executor(None, sys.stdin.readline)
+            name = name.strip()
+            
+            print("Enter your character's personality: ", end="")
+            sys.stdout.flush()
+            personality = await loop.run_in_executor(None, sys.stdin.readline)
+            personality = personality.strip()
+            
+            print("Enter your character's speaking style: ", end="")
+            sys.stdout.flush()
+            speaking_style = await loop.run_in_executor(None, sys.stdin.readline)
+            speaking_style = speaking_style.strip()
+            
+            character = {
+                "name": name,
+                "personality": personality,
+                "speaking_style": speaking_style
+            }
+        
+        print(f"\nYou are now roleplaying as {character['name']}!")
+        print("Type 'exit' or 'quit' to exit, 'help' for commands")
+        print("Enter your questions to interact with the system")
+
+        # Store character in additional_info
+        additional_info = {
+            "session_id": "cli-session",
+            "character": character
+        }
+        
+        print("About to initialize the orchestrator...")
+        await orchestrator.initialize()
+        print("Orchestrator initialized successfully!")
         
         try:
             # Main command loop
+            
             while True:
                 print("\n> ", end="")
                 sys.stdout.flush()  # Force flush the output
@@ -112,7 +181,7 @@ async def command_line_controller():
                     response = await orchestrator.process_query(
                         source="cli",
                         user_id="admin",
-                        query=user_input,
+                        query=user_input + " " + character["name"] + " " + character["personality"] + " " + character["speaking_style"],
                         additional_info=additional_info
                     )
                     
