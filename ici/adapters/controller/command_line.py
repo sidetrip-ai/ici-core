@@ -37,12 +37,11 @@ except ImportError as e:
 
 async def command_line_controller():
     """
-    Initialize the TelegramOrchestrator and provide a CLI interface.
+    Initialize the TelegramOrchestrator, fetch messages by username, generate a poem, and exit.
     """
     print("Initializing TelegramOrchestrator...")
     try:
         orchestrator = TelegramOrchestrator()
-        # print("Created TelegramOrchestrator instance")
     except Exception as e:
         print(f"Error creating TelegramOrchestrator: {e}")
         traceback.print_exc()
@@ -54,83 +53,28 @@ async def command_line_controller():
         await orchestrator.initialize()
         print("Orchestrator initialized successfully!")
         
-        # Cross-platform signal handling
-        loop = asyncio.get_running_loop()
+        # Prompt for username first
+        print("\nPlease enter the username of whose messages you want to fetch:")
+        username = input("Username: ").strip()
         
-        # Register signal handlers for graceful shutdown on Unix systems
-        if sys.platform != "win32":
-            # Register signal handlers for UNIX-like systems
-            for sig in (signal.SIGINT, signal.SIGTERM):
-                loop.add_signal_handler(sig, lambda: asyncio.create_task(shutdown(orchestrator)))
-            
-            print("Signal handlers registered for graceful shutdown")
+        if username:
+            print(f"\nFetching messages from username: {username}...")
+            await orchestrator._fetch_messages_by_username(username, limit=100)
+            print(f"Messages from {username} stored successfully")
         else:
-            # On Windows, we'll handle KeyboardInterrupt in the main loop
-            print("Running on Windows - keyboard interrupt will be handled in the main loop")
+            print("No username provided, skipping message fetching...")
         
-        # Command line interface loop
-        print("\nWelcome to the ICI Command Line Interface!")
-        print("Type 'exit' or 'quit' to exit, 'help' for commands")
-        print("Enter your questions to interact with the system")
+        # Generate a poem from the messages
+        print("\nGenerating a poem from the messages...")
+        poem = await orchestrator._generate_poem_from_chats("admin")
+        print("\nHere's a poem based on your conversations:\n")
+        print(poem)
         
-        try:
-            # Main command loop
-            while True:
-                print("\n> ", end="")
-                sys.stdout.flush()  # Force flush the output
-                user_input = await loop.run_in_executor(None, sys.stdin.readline)
-                user_input = user_input.strip()
-                
-                if not user_input:
-                    continue
-                    
-                if user_input.lower() in ('exit', 'quit'):
-                    print("Exiting...")
-                    break
-                    
-                if user_input.lower() == 'help':
-                    print_help()
-                    continue
-                    
-                if user_input.lower() == 'health':
-                    # Run healthcheck
-                    health = await orchestrator.healthcheck()
-                    print("\nHealth Status:")
-                    print(f"Overall health: {'Healthy' if health['healthy'] else 'Unhealthy'}")
-                    print(f"Message: {health['message']}")
-                    print("Component status:")
-                    for component, status in health.get('components', {}).items():
-                        health_str = 'Healthy' if status.get('healthy', False) else 'Unhealthy'
-                        print(f"  - {component}: {health_str}")
-                    continue
-                    
-                # Process the query
-                try:
-                    print("Processing your query...")
-                    # Set source to COMMAND_LINE and user_id to admin
-                    additional_info = {"session_id": "cli-session"}
-                    response = await orchestrator.process_query(
-                        source="cli",
-                        user_id="admin",
-                        query=user_input,
-                        additional_info=additional_info
-                    )
-                    
-                    # Print the response
-                    print("\nResponse:")
-                    print(response)
-                    
-                except Exception as e:
-                    print(f"\nError processing query: {str(e)}")
-                    traceback.print_exc()
-        
-        except KeyboardInterrupt:
-            # Handle Ctrl+C on Windows
-            print("\nReceived keyboard interrupt. Shutting down...")
-            await shutdown(orchestrator)
+        # Exit immediately after displaying the poem
+        print("\nAll done! Shutting down...")
         
     except Exception as e:
-        print(f"Error initializing orchestrator: {str(e)}")
+        print(f"Error during operation: {str(e)}")
         traceback.print_exc()
         return 1
     
