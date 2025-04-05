@@ -13,6 +13,9 @@ generator:
     presence_penalty: 0.0
     temperature: 0.7
     top_p: 1.0
+    headers:
+      HTTP-Referer: https://github.com/iRahulJadhav/ici-core
+      X-Title: ICI Core Application
   max_retries: 3
   memory:
     k: 5
@@ -20,6 +23,7 @@ generator:
   model: deepseek/deepseek-chat-v3-0324:free
   provider: openrouter
   type: langchain
+  base_url: https://openrouter.ai/api/v1
 ingestors:
   telegram:
     api_hash: $TELEGRAM_API_HASH

@@ -39,13 +39,17 @@ class OpenAIGenerator(Generator):
         self._config_path = os.environ.get("ICI_CONFIG_PATH", "config.yaml")
         
         # Default model and options
-        self._model = "gpt-4o"
+        self._model = "deepseek/deepseek-chat-v3-0324:free"
         self._default_options = {
             "temperature": 0.7,
             "max_tokens": 1024,
             "top_p": 1.0,
             "frequency_penalty": 0.0,
-            "presence_penalty": 0.0
+            "presence_penalty": 0.0,
+            "headers": {
+                "HTTP-Referer": "https://github.com/iRahulJadhav/ici-core",
+                "X-Title": "ICI Core Application"
+            }
         }
         
         # Retry configuration
@@ -54,6 +58,7 @@ class OpenAIGenerator(Generator):
         
         # Client will be initialized in initialize()
         self._client = None
+        self._base_url = "https://openrouter.ai/api/v1"
     
     async def initialize(self) -> None:
         """
@@ -79,13 +84,16 @@ class OpenAIGenerator(Generator):
             # Extract API key from config or environment
             api_key = generator_config.get("api_key")
             if not api_key:
-                api_key = os.environ.get("OPENAI_API_KEY")
+                api_key = os.environ.get("GENERATOR_API_KEY")
                 
             if not api_key:
                 raise ValueError("OpenAI API key not found in config or environment")
             
             # Extract model with default
             self._model = generator_config.get("model", self._model)
+            
+            # Extract base URL
+            self._base_url = generator_config.get("base_url", self._base_url)
             
             # Extract default options with defaults
             config_options = generator_config.get("default_options", {})
@@ -95,15 +103,21 @@ class OpenAIGenerator(Generator):
             self._max_retries = generator_config.get("max_retries", self._max_retries)
             self._base_retry_delay = generator_config.get("base_retry_delay", self._base_retry_delay)
             
-            # Initialize OpenAI client
-            self._client = AsyncOpenAI(api_key=api_key)
+            # Initialize OpenAI client with base URL
+            self._client = AsyncOpenAI(
+                api_key=api_key,
+                base_url=self._base_url
+            )
             
             self._is_initialized = True
             
             self.logger.info({
                 "action": "GENERATOR_INIT_SUCCESS",
                 "message": "OpenAIGenerator initialized successfully",
-                "data": {"model": self._model}
+                "data": {
+                    "model": self._model,
+                    "base_url": self._base_url
+                }
             })
             
         except Exception as e:
@@ -155,6 +169,9 @@ class OpenAIGenerator(Generator):
                         }
                     })
                     
+                    # Prepare headers
+                    headers = options.get("headers", {})
+                    
                     # Call OpenAI API
                     response: ChatCompletion = await self._client.chat.completions.create(
                         model=self._model,
@@ -164,7 +181,8 @@ class OpenAIGenerator(Generator):
                         top_p=options.get("top_p", 1.0),
                         frequency_penalty=options.get("frequency_penalty", 0.0),
                         presence_penalty=options.get("presence_penalty", 0.0),
-                        timeout=30  # 30 seconds timeout
+                        timeout=30,  # 30 seconds timeout
+                        headers=headers
                     )
                     
                     # Extract the generated text
@@ -249,40 +267,50 @@ class OpenAIGenerator(Generator):
         Sets the specific OpenAI model to use for generation.
 
         Args:
-            model: The OpenAI model identifier (e.g., 'gpt-4o', 'gpt-4', 'gpt-3.5-turbo')
+            model: The model identifier to use
 
         Raises:
-            GenerationError: If the model is invalid or unavailable
+            GenerationError: If the model change fails
         """
         if not self._is_initialized:
             raise GenerationError("Generator not initialized. Call initialize() first.")
-        
+            
         try:
-            # Basic validation for model name format
-            if not isinstance(model, str) or not model:
-                raise ValueError(f"Invalid model name: {model}")
-            
-            # TODO: Could add model existence validation with OpenAI API when available
-            
-            # Update model
             self._model = model
-            
             self.logger.info({
-                "action": "GENERATOR_SET_MODEL",
-                "message": f"Model updated to {model}",
-                "data": {"model": model}
+                "action": "GENERATOR_MODEL_CHANGE",
+                "message": f"Model changed to {model}"
             })
-            
         except Exception as e:
             error_msg = f"Failed to set model: {str(e)}"
-            
             self.logger.error({
-                "action": "GENERATOR_SET_MODEL_ERROR",
+                "action": "GENERATOR_MODEL_CHANGE_ERROR",
                 "message": error_msg,
-                "data": {"error": str(e), "error_type": type(e).__name__}
+                "data": {
+                    "error": str(e),
+                    "error_type": type(e).__name__,
+                    "model": model
+                }
             })
-            
             raise GenerationError(error_msg) from e
+    
+    def get_model(self) -> str:
+        """
+        Gets the current model being used for generation.
+
+        Returns:
+            str: The current model identifier
+        """
+        return self._model
+    
+    def get_base_url(self) -> str:
+        """
+        Gets the current base URL being used for API calls.
+
+        Returns:
+            str: The current base URL
+        """
+        return self._base_url
     
     async def set_default_options(self, options: Dict[str, Any]) -> None:
         """
