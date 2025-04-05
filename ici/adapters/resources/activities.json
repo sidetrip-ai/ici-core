@@ -1,0 +1,124 @@
+{
+  "data": [
+    {
+      "name": "Community Yoga Class",
+      "description": "Free yoga sessions in the park designed for all skill levels. Bring your own mat if you have one.",
+      "location": "Central Park",
+      "price": "Free",
+      "mood_tags": ["stress_relief", "relaxation", "mindfulness"],
+      "link": "https://www.google.com/search?q=community+yoga+classes+near+me"
+    },
+    {
+      "name": "Local Hiking Trails",
+      "description": "Explore nature with various difficulty levels of hiking trails nearby. Great for clearing your mind.",
+      "location": "Various locations",
+      "price": "Free",
+      "mood_tags": ["stress_relief", "self_discovery", "physical_activity"],
+      "link": "https://www.google.com/search?q=hiking+trails+near+me"
+    },
+    {
+      "name": "Community Garden Volunteering",
+      "description": "Help maintain local community gardens. No experience needed, and it's a great way to meet people.",
+      "location": "Various neighborhoods",
+      "price": "Free",
+      "mood_tags": ["social", "purpose", "mindfulness"],
+      "link": "https://www.google.com/search?q=community+garden+volunteer+near+me"
+    },
+    {
+      "name": "Public Library Events",
+      "description": "Free events including book clubs, workshops, and lectures. Check your local library's calendar.",
+      "location": "Public Libraries",
+      "price": "Free",
+      "mood_tags": ["social", "learning", "focus"],
+      "link": "https://www.google.com/search?q=public+library+events+near+me"
+    },
+    {
+      "name": "Local Art Gallery",
+      "description": "Many galleries have free admission days and opening night events with refreshments.",
+      "location": "Arts District",
+      "price": "Free-$10",
+      "mood_tags": ["inspiration", "self_discovery", "mindfulness"],
+      "link": "https://www.google.com/search?q=art+galleries+near+me"
+    },
+    {
+      "name": "Animal Shelter Volunteering",
+      "description": "Spend time with animals waiting for adoption. Great for animal lovers and proven to reduce stress.",
+      "location": "Local Shelters",
+      "price": "Free",
+      "mood_tags": ["comfort", "purpose", "stress_relief"],
+      "link": "https://www.google.com/search?q=animal+shelter+volunteer+near+me"
+    },
+    {
+      "name": "Farmers Market",
+      "description": "Explore local produce and artisanal goods. Often has free samples and a pleasant atmosphere.",
+      "location": "Various locations",
+      "price": "Free entry",
+      "mood_tags": ["social", "self_care", "mindfulness"],
+      "link": "https://www.google.com/search?q=farmers+market+near+me"
+    },
+    {
+      "name": "Free Museum Days",
+      "description": "Many museums offer free or pay-what-you-wish days each month. Check their websites for details.",
+      "location": "Cultural Districts",
+      "price": "Free on specific days",
+      "mood_tags": ["learning", "self_discovery", "focus"],
+      "link": "https://www.google.com/search?q=free+museum+days+near+me"
+    },
+    {
+      "name": "Group Fitness Classes",
+      "description": "Many gyms offer free trial classes, and community centers often have affordable options.",
+      "location": "Various locations",
+      "price": "Free-$20",
+      "mood_tags": ["physical_activity", "social", "stress_relief"],
+      "link": "https://www.google.com/search?q=group+fitness+classes+near+me"
+    },
+    {
+      "name": "Coffee Shop Work Session",
+      "description": "Change your environment by working from a local coffee shop. Good for breaking routine.",
+      "location": "Various locations",
+      "price": "Cost of beverage",
+      "mood_tags": ["focus", "productivity", "mild_social"],
+      "link": "https://www.google.com/search?q=coffee+shops+near+me"
+    },
+    {
+      "name": "Community Sports Leagues",
+      "description": "Join casual sports teams for adults of all skill levels. Great way to be active and meet people.",
+      "location": "Parks and Recreation Centers",
+      "price": "Varies",
+      "mood_tags": ["physical_activity", "social", "stress_relief"],
+      "link": "https://www.google.com/search?q=adult+recreational+sports+leagues+near+me"
+    },
+    {
+      "name": "Meditation Groups",
+      "description": "Many communities have free meditation groups that meet regularly in parks or community centers.",
+      "location": "Various locations",
+      "price": "Free-$10",
+      "mood_tags": ["mindfulness", "relaxation", "stress_relief"],
+      "link": "https://www.google.com/search?q=meditation+groups+near+me"
+    },
+    {
+      "name": "Bookstore Browsing",
+      "description": "Spend time exploring books at local bookstores. Many have comfortable seating areas.",
+      "location": "Various locations",
+      "price": "Free to browse",
+      "mood_tags": ["comfort", "self_discovery", "relaxation"],
+      "link": "https://www.google.com/search?q=bookstores+near+me"
+    },
+    {
+      "name": "Free Concerts in the Park",
+      "description": "Many cities offer free outdoor concerts during spring and summer months.",
+      "location": "Local Parks",
+      "price": "Free",
+      "mood_tags": ["social", "joy", "relaxation"],
+      "link": "https://www.google.com/search?q=free+concerts+in+the+park+near+me"
+    },
+    {
+      "name": "Volunteer at Food Bank",
+      "description": "Help sort and distribute food to those in need. Great way to gain perspective and help others.",
+      "location": "Local Food Banks",
+      "price": "Free",
+      "mood_tags": ["purpose", "social", "gratitude"],
+      "link": "https://www.google.com/search?q=food+bank+volunteer+near+me"
+    }
+  ]
+}
