@@ -34,7 +34,7 @@ router.get('/messages', async (req, res) => {
     // Fetch messages
     const messages = await whatsAppClient.fetchMessages(
       chatId, 
-      limit ? parseInt(limit, 10) : 100
+      limit ? parseInt(limit, 10) : 2000
     );
     
     res.json({

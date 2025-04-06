@@ -5,7 +5,7 @@ const path = require('path');
  */
 module.exports = {
   // Server settings
-  port: process.env.PORT || 3004,
+  port: process.env.PORT || 3006,
   wsPort: process.env.WS_PORT || 3005,
   
   // WhatsApp client settings
