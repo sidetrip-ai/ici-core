@@ -72,7 +72,7 @@ class LangchainGenerator(Generator):
         Raises:
             ValueError: If required credentials are not found
         """
-        generator_config = get_component_config("generator", self._config_path)
+        generator_config = get_component_config("orchestrator.generator", self._config_path)
         
         if self._provider == "openai":
             api_key = generator_config.get("api_key")
@@ -128,7 +128,7 @@ class LangchainGenerator(Generator):
             })
             
             # Load generator configuration from new path
-            generator_config = get_component_config("generator", self._config_path)
+            generator_config = get_component_config("orchestrator.generator", self._config_path)
             
             # Extract provider type
             self._provider = generator_config.get("provider", self._provider)
