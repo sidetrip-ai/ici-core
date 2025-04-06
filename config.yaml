@@ -120,3 +120,5 @@ orchestrator:
         include_overlap: true
         max_messages_per_chunk: 10
         time_window_minutes: 15
+        store_chat_history: true
+        chat_history_dir: "db/whatsapp_chats"

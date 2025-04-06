@@ -119,71 +119,21 @@ class WhatsAppIngestor(Ingestor):
         This method fetches all available chats and their messages.
         
         Returns:
-            Dict[str, Any]: Dictionary containing all WhatsApp data
-            
+            Dict[str, Any]: Dictionary containing all WhatsApp data organized by chat_id
+                {
+                    "conversations": {
+                        "chat_id_1": [messages],
+                        "chat_id_2": [messages],
+                        ...
+                    }
+                }
+                
         Raises:
             DataFetchError: If data fetch fails
         """
-        if not self._is_initialized:
-            raise ConfigurationError("Ingestor not initialized. Call initialize() first.")
-        
-        try:
-            # Ensure session is connected
-            await self._ensure_session()
-            
-            self.logger.info({
-                "action": "FETCH_FULL_DATA_START",
-                "message": "Fetching all WhatsApp messages"
-            })
-            
-            # Fetch all chats
-            chats = await self._fetch_chats()
-            
-            # Fetch messages for each chat
-            all_messages = []
-            
-            for chat in chats:
-                chat_id = chat.get("id")
-                if not chat_id:
-                    continue
-                
-                try:
-                    messages = await self._fetch_chat_messages(chat_id)
-                    # Add chat info to each message
-                    for msg in messages:
-                        msg["chatId"] = chat_id
-                        msg["chatName"] = chat.get("name")
-                        msg["isGroup"] = chat.get("isGroup", False)
-                    
-                    all_messages.extend(messages)
-                    
-                except Exception as e:
-                    self.logger.warning({
-                        "action": "FETCH_CHAT_MESSAGES_ERROR",
-                        "message": f"Error fetching messages for chat {chat_id}: {str(e)}",
-                        "data": {"chat_id": chat_id, "error": str(e)}
-                    })
-            
-            # Sort messages by timestamp
-            all_messages.sort(key=lambda x: x.get("timestamp", 0))
-            
-            self.logger.info({
-                "action": "FETCH_FULL_DATA_COMPLETE",
-                "message": f"Fetched {len(all_messages)} messages from {len(chats)} chats"
-            })
-            
-            return {
-                "messages": all_messages,
-                "conversations": chats
-            }
-            
-        except Exception as e:
-            self.logger.error({
-                "action": "FETCH_FULL_DATA_ERROR",
-                "message": f"Error fetching WhatsApp data: {str(e)}",
-                "data": {"error": str(e)}
-            })
-            raise DataFetchError(f"Failed to fetch WhatsApp data: {str(e)}") from e
+        return await self._fetch_chat_data(
+            log_prefix="FETCH_FULL_DATA"
+        )
     
     async def fetch_new_data(self, since: Optional[datetime] = None) -> Dict[str, Any]:
         """
@@ -193,80 +143,36 @@ class WhatsAppIngestor(Ingestor):
             since: Timestamp to fetch messages from (defaults to last 24 hours)
             
         Returns:
-            Dict[str, Any]: Dictionary containing new messages and conversations
-            
+            Dict[str, Any]: Dictionary containing new messages organized by chat_id
+                {
+                    "conversations": {
+                        "chat_id_1": [messages],
+                        "chat_id_2": [messages],
+                        ...
+                    }
+                }
+                
         Raises:
             DataFetchError: If data fetch fails
         """
-        if not self._is_initialized:
-            raise ConfigurationError("Ingestor not initialized. Call initialize() first.")
-        
         # If no since provided, default to last 24 hours
         if since is None:
             since = datetime.now(timezone.utc) - timedelta(days=1)
         
-        try:
-            # Ensure session is connected
-            print("Ensuring session")
-            await self._ensure_session()
-            
-            since_str = since.isoformat()
-            self.logger.info({
-                "action": "FETCH_NEW_DATA_START",
-                "message": f"Fetching WhatsApp messages since {since_str}",
-                "data": {"since": since_str}
-            })
-            
-            # Fetch all chats
-            chats = await self._fetch_chats()
-            
-            # Fetch new messages for each chat
-            all_messages = []
-            
-            for chat in chats:
-                chat_id = chat.get("id")
-                if not chat_id:
-                    continue
-                
-                try:
-                    messages = await self._fetch_chat_messages(chat_id, since)
-                    # Add chat info to each message
-                    for msg in messages:
-                        msg["chatId"] = chat_id
-                        msg["chatName"] = chat.get("name")
-                        msg["isGroup"] = chat.get("isGroup", False)
-                    
-                    all_messages.extend(messages)
-                    
-                except Exception as e:
-                    self.logger.warning({
-                        "action": "FETCH_CHAT_MESSAGES_ERROR",
-                        "message": f"Error fetching messages for chat {chat_id}: {str(e)}",
-                        "data": {"chat_id": chat_id, "error": str(e)}
-                    })
-            
-            # Sort messages by timestamp
-            all_messages.sort(key=lambda x: x.get("timestamp", 0))
-            
-            self.logger.info({
-                "action": "FETCH_NEW_DATA_COMPLETE",
-                "message": f"Fetched {len(all_messages)} new messages from {len(chats)} chats since {since_str}"
-            })
-            
-            return {
-                "messages": all_messages,
-                "conversations": chats
-            }
-            
-        except Exception as e:
-            self.logger.error({
-                "action": "FETCH_NEW_DATA_ERROR",
-                "message": f"Error fetching new WhatsApp data: {str(e)}",
-                "data": {"error": str(e), "since": since.isoformat() if since else None}
-            })
-            raise DataFetchError(f"Failed to fetch new WhatsApp data: {str(e)}") from e
+        since_str = since.isoformat()
+        
+        async def filter_since(chat_id):
+            return await self._fetch_chat_messages(chat_id, since)
+        
+        result = await self._fetch_chat_data(
+            message_filter=filter_since,
+            log_prefix="FETCH_NEW_DATA",
+            additional_log_data={"since": since_str}
+        )
+        
+        return result
     
-    async def fetch_data_in_range(self, start: datetime, end: datetime) -> Dict[str, List[Dict[str, Any]]]:
+    async def fetch_data_in_range(self, start: datetime, end: datetime) -> Dict[str, Any]:
         """
         Fetch message data within a specific date range.
         
@@ -275,85 +181,146 @@ class WhatsAppIngestor(Ingestor):
             end: End timestamp for data range.
             
         Returns:
-            Dict[str, List[Dict[str, Any]]]: Dictionary containing conversations and messages in range.
+            Dict[str, Any]: Dictionary containing conversations and messages in range.
+                {
+                    "conversations": {
+                        "chat_id_1": [messages],
+                        "chat_id_2": [messages],
+                        ...
+                    }
+                }
         """
         # Ensure timestamps are timezone aware
         start = ensure_tz_aware(start)
         end = ensure_tz_aware(end)
         
-        # Convert to ISO format for API
+        # Convert to ISO format for logging
         start_str = start.isoformat()
         end_str = end.isoformat()
         
-        self.logger.info({
-            "action": "FETCH_DATA_IN_RANGE_START",
-            "message": f"Fetching WhatsApp data from {start_str} to {end_str}",
-            "data": {"start": start_str, "end": end_str, "session_id": self._session_id}
-        })
+        async def filter_by_range(chat_id):
+            messages = await self._fetch_chat_messages(chat_id)
+            return [
+                msg for msg in messages 
+                if self._is_message_in_timeframe(msg, start, end)
+            ]
         
-        # Ensure we have a WhatsApp session
-        await self._ensure_session()
+        return await self._fetch_chat_data(
+            message_filter=filter_by_range,
+            log_prefix="FETCH_DATA_IN_RANGE",
+            additional_log_data={
+                "start": start_str, 
+                "end": end_str, 
+                "session_id": self._session_id
+            }
+        )
+    
+    async def _fetch_chat_data(
+        self,
+        message_filter=None,
+        log_prefix="FETCH_DATA",
+        additional_log_data=None
+    ) -> Dict[str, Any]:
+        """
+        Common function for fetching chat data with optional filtering.
+        
+        Args:
+            message_filter: Optional async function to filter messages
+                Should accept (chat_id) and return filtered messages
+            log_prefix: Prefix for log action names
+            additional_log_data: Optional additional data to include in logs
+            
+        Returns:
+            Dict with conversations organized by chat_id
+            
+        Raises:
+            ConfigurationError: If ingestor is not initialized
+            DataFetchError: If data fetch fails
+        """
+        if not self._is_initialized:
+            raise ConfigurationError("Ingestor not initialized. Call initialize() first.")
         
         try:
-            # Get all chats
-            chats = await self._fetch_chats()
+            # Ensure session is connected
+            await self._ensure_session()
             
-            # Get messages for each chat and filter by date range
-            all_messages = []
-            for chat in chats:
-                chat_id = chat.get("id")
-                messages = await self._fetch_chat_messages(chat_id)
-                
-                # Filter messages by timestamp
-                filtered_messages = [
-                    msg for msg in messages 
-                    if "timestamp" in msg and 
-                    datetime.fromtimestamp(msg["timestamp"] / 1000, tz=timezone.utc) >= start and
-                    datetime.fromtimestamp(msg["timestamp"] / 1000, tz=timezone.utc) <= end
-                ]
-                
-                # Add chat metadata to messages
-                for message in filtered_messages:
-                    message["chat_name"] = chat.get("name", "")
-                    message["source"] = "whatsapp"
-                
-                all_messages.extend(filtered_messages)
-                
-                # Add small delay to avoid rate limiting
-                await asyncio.sleep(0.5)
-            
-            result = {
-                "conversations": chats,
-                "messages": all_messages
-            }
+            log_data = additional_log_data or {}
             
             self.logger.info({
-                "action": "FETCH_DATA_IN_RANGE_COMPLETE",
-                "message": f"Fetched {len(chats)} chats and {len(all_messages)} messages in date range",
-                "data": {
-                    "chat_count": len(chats),
-                    "message_count": len(all_messages),
-                    "start": start_str,
-                    "end": end_str,
-                    "session_id": self._session_id
-                }
+                "action": f"{log_prefix}_START",
+                "message": "Fetching WhatsApp messages",
+                "data": log_data
             })
             
-            return result
+            # Fetch all chats
+            chats = await self._fetch_chats()
+            
+            # Fetch messages for each chat and organize by chat_id
+            conversations = {}
+            total_messages = 0
+            
+            for chat in chats:
+                chat_id = chat.get("id")
+                if not chat_id:
+                    continue
+                
+                try:
+                    # Fetch and filter messages
+                    if message_filter:
+                        messages = await message_filter(chat_id)
+                    else:
+                        messages = await self._fetch_chat_messages(chat_id)
+                    
+                    # Skip if no messages
+                    if not messages:
+                        continue
+                        
+                    # Add chat info to each message
+                    for msg in messages:
+                        msg["chatId"] = chat_id
+                        msg["chatName"] = chat.get("name")
+                        msg["isGroup"] = chat.get("isGroup", False)
+                    
+                    # Add to conversations
+                    conversations[chat_id] = messages
+                    total_messages += len(messages)
+                    
+                except Exception as e:
+                    self.logger.warning({
+                        "action": f"FETCH_CHAT_MESSAGES_ERROR",
+                        "message": f"Error fetching messages for chat {chat_id}: {str(e)}",
+                        "data": {"chat_id": chat_id, "error": str(e)}
+                    })
+            
+            # Combine log data with results
+            complete_log_data = {
+                "total_messages": total_messages,
+                "chat_count": len(conversations)
+            }
+            if additional_log_data:
+                complete_log_data.update(additional_log_data)
+            
+            self.logger.info({
+                "action": f"{log_prefix}_COMPLETE",
+                "message": f"Fetched {total_messages} messages from {len(conversations)} chats",
+                "data": complete_log_data
+            })
+            
+            return {
+                "conversations": conversations
+            }
             
         except Exception as e:
-            error_message = f"Failed to fetch WhatsApp data in range: {str(e)}"
+            error_log_data = {"error": str(e), "error_type": type(e).__name__}
+            if additional_log_data:
+                error_log_data.update(additional_log_data)
+            
             self.logger.error({
-                "action": "FETCH_DATA_IN_RANGE_ERROR",
-                "message": error_message,
-                "data": {
-                    "error": str(e), 
-                    "error_type": type(e).__name__, 
-                    "start": start_str, 
-                    "end": end_str
-                }
+                "action": f"{log_prefix}_ERROR",
+                "message": f"Error fetching WhatsApp data: {str(e)}",
+                "data": error_log_data
             })
-            raise DataFetchError(error_message) from e
+            raise DataFetchError(f"Failed to fetch WhatsApp data: {str(e)}") from e
     
     async def healthcheck(self) -> Dict[str, Any]:
         """
@@ -588,14 +555,17 @@ class WhatsAppIngestor(Ingestor):
     
     async def _fetch_chat_messages(self, chat_id: str, since: Optional[datetime] = None) -> List[Dict[str, Any]]:
         """
-        Fetch messages from a specific chat.
+        Fetch all messages from a specific chat.
         
         Args:
-            chat_id: WhatsApp chat ID
+            chat_id: The ID of the chat to fetch messages from
             since: Optional timestamp to filter messages from
             
         Returns:
-            List[Dict[str, Any]]: List of message data
+            List[Dict[str, Any]]: List of message objects
+            
+        Raises:
+            DataFetchError: If message fetch fails
         """
         async with aiohttp.ClientSession() as session:
             try:
@@ -623,6 +593,31 @@ class WhatsAppIngestor(Ingestor):
                     "data": {"error": str(e), "session_id": self._session_id, "chat_id": chat_id}
                 })
                 raise DataFetchError(f"Failed to fetch WhatsApp messages: {str(e)}") from e
+
+    def _is_message_in_timeframe(self, message: Dict[str, Any], start: datetime, end: datetime) -> bool:
+        """
+        Check if a message falls within a specified timeframe.
+        
+        Args:
+            message: The message to check
+            start: Start timestamp
+            end: End timestamp
+            
+        Returns:
+            bool: True if the message is within the timeframe, False otherwise
+        """
+        if "timestamp" not in message:
+            return False
+        
+        # Convert WhatsApp timestamp (milliseconds) to datetime
+        timestamp = message["timestamp"]
+        if timestamp > 1600000000000:  # Likely in milliseconds if very large
+            timestamp = timestamp / 1000
+        
+        message_time = datetime.fromtimestamp(timestamp, tz=timezone.utc)
+        
+        # Check if message is within timeframe
+        return start <= message_time <= end
 
     async def _update_auth_status(self) -> str:
         """
