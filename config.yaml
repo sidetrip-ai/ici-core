@@ -53,6 +53,7 @@ orchestrator:
   # Components used by orchestrator
   generator:
     api_key: $GENERATOR_API_KEY
+    base_url: http://localhost:11434
     base_retry_delay: 1
     chain_type: simple
     default_options:
@@ -111,7 +112,7 @@ orchestrator:
         interval_minutes: 5
       ingestor:
         whatsapp:
-          service_url: "http://localhost:3004"
+          service_url: "http://localhost:3006"
           session_id: "default_session"
           request_timeout: 30
       preprocessor:
