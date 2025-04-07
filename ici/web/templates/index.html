@@ -520,15 +520,15 @@
                             <div class="flex items-center justify-between mb-2">
                                 <span class="text-sm font-medium text-indigo-600">${result.metadata.source}</span>
                             </div>
-                            <p class="text-gray-800 line-clamp-2">${result.content}</p>
+                            <p class="text-gray-800 line-clamp-2">${result.text}</p>
                         `;
                     } else {
                         resultDiv.innerHTML = `
                             <div class="flex items-center justify-between mb-2">
                                 <span class="text-sm font-medium text-indigo-600">${result.metadata.source}</span>
-                                <span class="text-sm text-gray-500">Score: ${(result.similarity * 100).toFixed(1)}%</span>
+                                <span class="text-sm text-gray-500">Score: ${(result.score * 100).toFixed(1)}%</span>
                             </div>
-                            <p class="text-gray-800">${result.content}</p>
+                            <p class="text-gray-800">${result.text}</p>
                         `;
                     }
                     

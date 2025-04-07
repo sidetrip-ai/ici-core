@@ -1,7 +1,8 @@
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Dict, Any, List
 from ici.utils.text_processor import TextPreprocessor
 from ici.core.vector_store import VectorStore
+from ici.core.exceptions import VectorStoreError
 
 class DocumentProcessor:
     """Class for processing documents and storing them in the vector store."""
@@ -35,14 +36,36 @@ class DocumentProcessor:
                 print(f"No text content extracted from {file_path}")
                 return False
             
-            # Store the processed text in the vector store
-            self.vector_store.add_document(
-                text=processed_text,
-                metadata={"source": Path(file_path).name}
-            )
+            # Create document with metadata
+            document = {
+                'text': processed_text,
+                'metadata': {
+                    'source': Path(file_path).name,
+                    'file_path': str(file_path),
+                    'file_type': Path(file_path).suffix.lower()[1:]  # Remove the dot from extension
+                }
+            }
+            
+            # Store the document
+            self.vector_store.store_documents([document])
             
             return True
             
         except Exception as e:
             print(f"Error processing document {file_path}: {e}")
-            return False 
+            return False
+            
+    def process_documents(self, file_paths: List[str]) -> Dict[str, bool]:
+        """
+        Process multiple documents in batch.
+        
+        Args:
+            file_paths: List of paths to document files
+            
+        Returns:
+            Dictionary mapping file paths to success status
+        """
+        results = {}
+        for file_path in file_paths:
+            results[file_path] = self.process_document(file_path)
+        return results 

@@ -1,7 +1,8 @@
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 import os
 from dotenv import load_dotenv
 import requests
+from ici.core.exceptions import VectorStoreError
 
 class RAGEngine:
     """Engine for RAG-based question answering."""
@@ -37,8 +38,12 @@ class RAGEngine:
             Dictionary containing the answer and relevant documents
         """
         try:
-            # Retrieve relevant documents
-            docs = self.vector_store.search(question, top_k=top_k)
+            # Search for relevant documents
+            docs = self.vector_store.search(
+                query=question,
+                num_results=top_k,
+                search_type="content"  # Always use content search for RAG
+            )
             
             if not docs:
                 return {
@@ -49,7 +54,7 @@ class RAGEngine:
             
             # Combine document contents for context
             context = "\n\n".join([
-                f"Document: {doc['metadata']['source']}\n{doc['content']}"
+                f"Document: {doc['metadata']['source']}\n{doc['text']}"
                 for doc in docs
             ])
             
@@ -66,39 +71,48 @@ class RAGEngine:
             ]
             
             # Call the OpenRouter API
-            response = requests.post(
-                "https://openrouter.ai/api/v1/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {self.api_key}",
-                    "HTTP-Referer": "http://localhost:8000",  # Required for OpenRouter
-                    "Content-Type": "application/json"
-                },
-                json={
-                    "model": "mistralai/mistral-7b-instruct",  # Using Mistral model
-                    "messages": messages,
-                    "max_tokens": 1024,
-                    "temperature": 0.7,
-                    "top_p": 0.7
-                },
-                timeout=30  # Add timeout to prevent hanging
-            )
-            
-            response.raise_for_status()  # Raise exception for bad status codes
-            
-            answer = response.json()["choices"][0]["message"]["content"].strip()
-            if not answer:
-                answer = "I apologize, but I couldn't generate a proper response. Please try rephrasing your question."
-            
+            try:
+                response = requests.post(
+                    "https://openrouter.ai/api/v1/chat/completions",
+                    headers={
+                        "Authorization": f"Bearer {self.api_key}",
+                        "HTTP-Referer": "http://localhost:8000",  # Required for OpenRouter
+                        "Content-Type": "application/json"
+                    },
+                    json={
+                        "model": "mistralai/mistral-7b-instruct",  # Using Mistral model
+                        "messages": messages,
+                        "max_tokens": 1024,
+                        "temperature": 0.7,
+                        "top_p": 0.7
+                    },
+                    timeout=30  # Add timeout to prevent hanging
+                )
+                
+                response.raise_for_status()  # Raise exception for bad status codes
+                
+                answer = response.json()["choices"][0]["message"]["content"].strip()
+                if not answer:
+                    answer = "I apologize, but I couldn't generate a proper response. Please try rephrasing your question."
+                
+                return {
+                    "answer": answer,
+                    "sources": [doc['metadata']['source'] for doc in docs],
+                    "relevant_docs": docs
+                }
+                
+            except requests.exceptions.RequestException as e:
+                print(f"API request error: {e}")
+                return {
+                    "answer": "I encountered an error while processing your question. Please try again later.",
+                    "sources": [],
+                    "relevant_docs": []
+                }
+                
+        except VectorStoreError as e:
+            print(f"Vector store error: {e}")
             return {
-                "answer": answer,
-                "sources": [doc['metadata']['source'] for doc in docs],
-                "relevant_docs": docs
-            }
-            
-        except requests.exceptions.RequestException as e:
-            print(f"API request error: {e}")
-            return {
-                "answer": "I encountered an error while processing your question. Please try again later.",
+                "answer": "I encountered an error accessing the document store. Please try again later.",
                 "sources": [],
                 "relevant_docs": []
             }

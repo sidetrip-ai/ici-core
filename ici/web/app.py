@@ -15,14 +15,23 @@ from ici.core.rag_engine import RAGEngine
 from ici.core.document_processor import DocumentProcessor
 from ici.core.interfaces import Orchestrator, Generator, PromptBuilder
 
-# Initialize components outside the lifespan
+# Initialize components
 text_processor = TextPreprocessor()
 vector_store = VectorStore()
 document_processor = DocumentProcessor(text_processor, vector_store)
 rag_engine = RAGEngine(vector_store)
 
+# Set up upload directory
+UPLOAD_DIR = Path("uploads")
+UPLOAD_DIR.mkdir(exist_ok=True)
+STATIC_DIR = Path(__file__).parent / "static"
+STATIC_DIR.mkdir(exist_ok=True)
+TEMPLATES_DIR = Path(__file__).parent / "templates"
+TEMPLATES_DIR.mkdir(exist_ok=True)
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    """Handle startup and shutdown events."""
     # Startup: Initialize components
     try:
         await vector_store.initialize()
@@ -34,21 +43,12 @@ async def lifespan(app: FastAPI):
     
     # Shutdown: cleanup
     try:
-        # Clear all documents from the vector store
         vector_store.clear()
         print("Successfully cleared vector store on shutdown")
     except Exception as e:
         print(f"Error clearing vector store on shutdown: {e}")
 
 app = FastAPI(title="ICI Document Upload", lifespan=lifespan)
-
-# Create directories if they don't exist
-UPLOAD_DIR = Path("uploads")
-UPLOAD_DIR.mkdir(exist_ok=True)
-STATIC_DIR = Path(__file__).parent / "static"
-STATIC_DIR.mkdir(exist_ok=True)
-TEMPLATES_DIR = Path(__file__).parent / "templates"
-TEMPLATES_DIR.mkdir(exist_ok=True)
 
 # Mount static files
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
@@ -57,12 +57,17 @@ app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
 @app.get("/", response_class=HTMLResponse)
-async def home(request: Request):
-    """Render the home page."""
-    return templates.TemplateResponse(
-        "index.html",
-        {"request": request}
-    )
+async def root(request: Request):
+    """Render the main page."""
+    return templates.TemplateResponse("index.html", {"request": request})
+
+@app.get("/document-names")
+async def get_document_names():
+    """Get list of uploaded document names."""
+    try:
+        return {"documents": vector_store.get_document_names()}
+    except Exception as e:
+        return {"error": str(e)}
 
 @app.post("/upload")
 async def upload_files(files: List[UploadFile] = File(...)):
@@ -103,20 +108,11 @@ async def upload_files(files: List[UploadFile] = File(...)):
     return {"results": results}
 
 @app.post("/search")
-async def search(query: str = Form(...), search_type: str = Form("content")):
-    """Search through processed documents."""
+async def search_documents(query: str = Form(...), search_type: str = Form("content")):
+    """Search documents by content or filename."""
     try:
-        results = vector_store.search(query, top_k=5, search_type=search_type)
+        results = vector_store.search(query, search_type=search_type)
         return {"results": results}
-    except Exception as e:
-        return {"error": str(e)}
-
-@app.get("/document-names")
-async def get_document_names():
-    """Get list of all document names."""
-    try:
-        names = vector_store.get_document_names()
-        return {"names": names}
     except Exception as e:
         return {"error": str(e)}
 
@@ -131,9 +127,7 @@ async def ask_question(question: str = Form(...)):
             "relevant_docs": response["relevant_docs"]
         }
     except Exception as e:
-        return {
-            "error": str(e)
-        }
+        return {"error": str(e)}
 
 def run():
     """Run the web application."""
