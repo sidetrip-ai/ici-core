@@ -3,100 +3,295 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ICI Document Upload</title>
+    <title>ICI Document Assistant</title>
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.min.js"></script>
     <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        #p5-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+            background: transparent;
+        }
+        .content-container {
+            position: relative;
+            z-index: 1;
+        }
         .drag-area {
-            border: 2px dashed #4a5568;
+            border: 2px dashed #6366f1;
             min-height: 200px;
             transition: all 0.3s ease;
+            background-color: rgba(255, 255, 255, 0.9);
         }
         .drag-area.active {
-            border-color: #4299e1;
-            background-color: #ebf8ff;
+            border-color: #4f46e5;
+            background-color: rgba(238, 242, 255, 0.95);
         }
         .chat-container {
             max-height: 500px;
             overflow-y: auto;
+            scroll-behavior: smooth;
         }
         .message {
             margin-bottom: 1rem;
-            padding: 1rem;
-            border-radius: 0.5rem;
+            padding: 1.25rem;
+            border-radius: 1rem;
+            animation: fadeIn 0.3s ease-out;
+            box-shadow: 0 2px 4px rgba(99, 83, 83, 0.05);
+            backdrop-filter: blur(10px);
         }
         .user-message {
-            background-color: #e3f2fd;
+            background-color: rgba(238, 242, 255, 0.9);
             margin-left: 2rem;
+            border-bottom-right-radius: 0.5rem;
         }
         .assistant-message {
-            background-color: #f3f4f6;
+            background-color: rgba(255, 255, 255, 0.9);
             margin-right: 2rem;
+            border: 1px solid rgba(229, 231, 235, 0.5);
+            border-bottom-left-radius: 0.5rem;
         }
         .sources {
             font-size: 0.875rem;
             color: #6b7280;
-            margin-top: 0.5rem;
-            padding-top: 0.5rem;
-            border-top: 1px solid #e5e7eb;
+            margin-top: 0.75rem;
+            padding-top: 0.75rem;
+            border-top: 1px solid rgba(229, 231, 235, 0.5);
+        }
+        .loading {
+            display: inline-block;
+            width: 1.5rem;
+            height: 1.5rem;
+            border: 3px solid rgba(229, 231, 235, 0.5);
+            border-radius: 50%;
+            border-top-color: #6366f1;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .file-item {
+            transition: all 0.3s ease;
+            background-color: rgba(255, 255, 255, 0.9);
+        }
+        .file-item:hover {
+            background-color: rgba(249, 250, 251, 0.95);
+        }
+        .search-result {
+            transition: all 0.3s ease;
+            background-color: rgba(255, 255, 255, 0.9);
+        }
+        .search-result:hover {
+            transform: translateX(5px);
+        }
+        .btn-primary {
+            background-color: #6366f1;
+            transition: all 0.2s ease;
+        }
+        .btn-primary:hover {
+            background-color: #4f46e5;
+            transform: translateY(-1px);
+        }
+        .btn-primary:active {
+            transform: translateY(0);
+        }
+        .content-card {
+            background-color: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
         }
     </style>
 </head>
-<body class="bg-gray-100 min-h-screen">
-    <div class="container mx-auto px-4 py-8">
-        <h1 class="text-3xl font-bold text-center mb-8">ICI Document Upload</h1>
+<body>
+    <div id="p5-container"></div>
+    <div class="content-container container mx-auto px-4 py-8 max-w-5xl">
+        <h1 class="text-4xl font-bold text-center mb-2 text-white">ICI Document Assistant</h1>
+        <p class="text-center text-gray-200 mb-8">Upload documents, ask questions, and search through your knowledge base</p>
         
         <!-- Upload Section -->
-        <div class="bg-white rounded-lg shadow-md p-6 mb-8">
-            <h2 class="text-xl font-semibold mb-4">Upload Documents</h2>
-            <div class="drag-area flex flex-col items-center justify-center p-8 rounded-lg mb-4">
-                <svg class="w-16 h-16 text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <div class="content-card rounded-xl shadow-sm p-6 mb-8">
+            <h2 class="text-xl font-semibold mb-4 text-gray-900 flex items-center">
+                <svg class="w-6 h-6 mr-2 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
                 </svg>
-                <p class="text-gray-600 text-center mb-4">Drag & drop files here or click to select</p>
+                Upload Documents
+            </h2>
+            <div class="drag-area flex flex-col items-center justify-center p-8 rounded-xl mb-4 bg-gray-50">
+                <svg class="w-16 h-16 text-indigo-600 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+                </svg>
+                <p class="text-gray-600 text-center mb-4">Drag & drop your files here or click to select</p>
                 <input type="file" id="fileInput" multiple class="hidden">
-                <button onclick="document.getElementById('fileInput').click()" class="bg-blue-500 hover:bg-blue-600 text-white px-6 py-2 rounded-lg transition duration-200">
+                <button onclick="document.getElementById('fileInput').click()" class="btn-primary text-white px-6 py-2 rounded-lg font-medium">
                     Select Files
                 </button>
             </div>
             <div id="fileList" class="space-y-2"></div>
             <div id="uploadProgress" class="hidden">
-                <div class="w-full bg-gray-200 rounded-full h-2.5 mt-4">
-                    <div class="bg-blue-500 h-2.5 rounded-full" style="width: 0%"></div>
+                <div class="w-full bg-gray-100 rounded-full h-2 mt-4">
+                    <div class="bg-indigo-600 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
                 </div>
             </div>
         </div>
 
         <!-- Chat Section -->
-        <div class="bg-white rounded-lg shadow-md p-6 mb-8">
-            <h2 class="text-xl font-semibold mb-4">Ask Questions</h2>
-            <div class="chat-container mb-4" id="chatContainer">
+        <div class="content-card rounded-xl shadow-sm p-6 mb-8">
+            <h2 class="text-xl font-semibold mb-4 text-gray-900 flex items-center">
+                <svg class="w-6 h-6 mr-2 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/>
+                </svg>
+                Ask Questions
+            </h2>
+            <div class="chat-container mb-4 p-4 bg-gray-50 rounded-xl" id="chatContainer">
                 <!-- Chat messages will be added here -->
             </div>
             <div class="flex space-x-4">
                 <input type="text" id="questionInput" placeholder="Ask a question about your documents..." 
-                       class="flex-1 border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                       class="flex-1 border border-gray-200 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                        onkeypress="if(event.key === 'Enter') askQuestion()">
-                <button onclick="askQuestion()" class="bg-blue-500 hover:bg-blue-600 text-white px-6 py-2 rounded-lg transition duration-200">
-                    Ask
+                <button onclick="askQuestion()" class="btn-primary text-white px-6 py-2 rounded-lg font-medium flex items-center">
+                    <span>Ask</span>
+                    <svg class="w-5 h-5 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 5l7 7-7 7M5 5l7 7-7 7"/>
+                    </svg>
                 </button>
             </div>
         </div>
 
         <!-- Search Section -->
-        <div class="bg-white rounded-lg shadow-md p-6">
-            <h2 class="text-xl font-semibold mb-4">Search Documents</h2>
-            <div class="flex space-x-4 mb-6">
-                <input type="text" id="searchInput" placeholder="Enter your search query..." 
-                       class="flex-1 border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                <button onclick="performSearch()" class="bg-blue-500 hover:bg-blue-600 text-white px-6 py-2 rounded-lg transition duration-200">
-                    Search
-                </button>
+        <div class="content-card rounded-xl shadow-sm p-6">
+            <h2 class="text-xl font-semibold mb-4 text-gray-900 flex items-center">
+                <svg class="w-6 h-6 mr-2 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                </svg>
+                Search Documents
+            </h2>
+            <div class="space-y-4">
+                <div class="flex items-center space-x-4">
+                    <div class="flex-1">
+                        <input type="text" id="searchInput" placeholder="Enter your search query..." 
+                               class="w-full border border-gray-200 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+                    </div>
+                    <select id="searchType" class="border border-gray-200 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-white">
+                        <option value="filename">Search by Filename</option>
+                        <option value="content">Search by Content</option>
+                    </select>
+                    <button onclick="performSearch()" class="btn-primary text-white px-6 py-2 rounded-lg font-medium flex items-center">
+                        <span>Search</span>
+                        <svg class="w-5 h-5 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                        </svg>
+                    </button>
+                </div>
+                <div id="documentList" class="hidden space-y-2 p-4 bg-gray-50 rounded-lg">
+                    <h3 class="font-medium text-gray-700 mb-2">Available Documents:</h3>
+                    <ul class="list-disc list-inside text-gray-600"></ul>
+                </div>
             </div>
-            <div id="searchResults" class="space-y-4"></div>
+            <div id="searchResults" class="space-y-4 mt-4"></div>
         </div>
     </div>
 
     <script>
+        // P5.js Star class
+        class Star {
+            constructor() {
+                this.reset();
+            }
+            
+            reset() {
+                // Random position in 3D space
+                this.x = random(-width, width);
+                this.y = random(-height, height);
+                this.z = random(width);
+                
+                // Previous z for trail effect
+                this.pz = this.z;
+                
+                // Random properties for variation
+                this.speed = random(10, 30);
+                this.size = random(0.5, 2);
+                this.brightness = random(150, 255);  // Increased minimum brightness
+                this.color = color(255, 255, 255, this.brightness);  // Changed to pure white
+            }
+            
+            update() {
+                // Move star closer (z gets smaller)
+                this.z = this.z - this.speed;
+                
+                // Reset star if it's too close
+                if (this.z < 1) {
+                    this.reset();
+                }
+            }
+            
+            show() {
+                // Calculate perspective projection
+                let sx = map(this.x / this.z, 0, 1, 0, width);
+                let sy = map(this.y / this.z, 0, 1, 0, height);
+                
+                // Calculate previous position for trail
+                let px = map(this.x / this.pz, 0, 1, 0, width);
+                let py = map(this.y / this.pz, 0, 1, 0, height);
+                
+                // Update previous position
+                this.pz = this.z;
+                
+                // Draw trail
+                stroke(this.color);
+                strokeWeight(this.size);
+                line(px, py, sx, sy);
+                
+                // Draw star
+                noStroke();
+                fill(this.color);
+                circle(sx, sy, this.size * map(this.z, 0, width, 2, 0));
+            }
+        }
+
+        // P5.js sketch
+        let stars = [];
+        const numStars = 800;  // Increased number of stars
+
+        function setup() {
+            let canvas = createCanvas(windowWidth, windowHeight);
+            canvas.parent('p5-container');
+            
+            // Create stars
+            for (let i = 0; i < numStars; i++) {
+                stars[i] = new Star();
+            }
+        }
+
+        function draw() {
+            // Dark blue background with very high transparency
+            background(10, 10, 30, 5);  // Changed transparency from 20 to 5
+            
+            // Move to center
+            translate(width/2, height/2);
+            
+            // Update and show stars with increased brightness
+            for (let star of stars) {
+                star.update();
+                star.show();
+            }
+        }
+
+        function windowResized() {
+            resizeCanvas(windowWidth, windowHeight);
+        }
+
         // File upload handling
         const dragArea = document.querySelector('.drag-area');
         const fileInput = document.getElementById('fileInput');
@@ -170,10 +365,11 @@
                     if (fileElement) {
                         const status = fileElement.querySelector('.status');
                         status.textContent = result.status === 'success' ? '✓' : '✗';
-                        status.className = `status ${result.status === 'success' ? 'text-green-500' : 'text-red-500'}`;
+                        status.className = `status ${result.status === 'success' ? 'text-green-500' : 'text-red-500'} font-bold`;
                         
                         const message = fileElement.querySelector('.message');
                         message.textContent = result.message;
+                        message.className = `message ${result.status === 'success' ? 'text-green-600' : 'text-red-600'} text-sm`;
                     }
                 });
 
@@ -189,119 +385,197 @@
 
         function displayFile(file) {
             const div = document.createElement('div');
-            div.className = 'flex items-center space-x-4 text-sm';
-            div.setAttribute('data-filename', file.filename);
+            div.className = 'file-item flex items-center space-x-4 text-sm p-3 rounded-lg border border-gray-100';
+            div.setAttribute('data-filename', file.name);
             div.innerHTML = `
-                <span class="status text-gray-400">⋯</span>
-                <span class="flex-1">${file.name}</span>
-                <span class="message text-gray-500"></span>
+                <span class="status text-gray-400 font-bold">⋯</span>
+                <span class="flex-1 text-gray-700">${file.name}</span>
+                <span class="message text-gray-500 text-sm"></span>
             `;
             fileList.appendChild(div);
         }
 
         // Chat functionality
         async function askQuestion() {
-            const questionInput = document.getElementById('questionInput');
-            const question = questionInput.value.trim();
+            const input = document.getElementById('questionInput');
+            const question = input.value.trim();
+            
             if (!question) return;
-
-            // Display user message
-            addMessage(question, 'user');
-            questionInput.value = '';
-
-            const formData = new FormData();
-            formData.append('question', question);
-
+            
+            // Add user message
+            addMessage('user', question);
+            input.value = '';
+            
+            // Add loading message
+            const loadingId = addLoadingMessage();
+            
             try {
                 const response = await fetch('/ask', {
                     method: 'POST',
-                    body: formData
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: `question=${encodeURIComponent(question)}`
                 });
-
+                
                 const data = await response.json();
                 
+                // Remove loading message
+                removeMessage(loadingId);
+                
+                // Add assistant message
                 if (data.error) {
-                    addMessage(`Error: ${data.error}`, 'assistant');
+                    addMessage('assistant', 'Sorry, I encountered an error: ' + data.error);
                 } else {
-                    addMessage(data.answer, 'assistant', data.sources);
+                    addMessage('assistant', data.answer, data.sources);
                 }
-
+                
             } catch (error) {
-                console.error('Question failed:', error);
-                addMessage('Sorry, an error occurred while processing your question.', 'assistant');
+                console.error('Error:', error);
+                removeMessage(loadingId);
+                addMessage('assistant', 'Sorry, I encountered an error while processing your question.');
             }
         }
 
-        function addMessage(text, type, sources = null) {
-            const div = document.createElement('div');
-            div.className = `message ${type}-message`;
+        function addMessage(type, content, sources = []) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${type}-message`;
             
-            let content = `<p>${text}</p>`;
+            const contentP = document.createElement('p');
+            contentP.className = 'text-gray-800';
+            contentP.textContent = content;
+            messageDiv.appendChild(contentP);
+            
             if (sources && sources.length > 0) {
-                content += `
-                    <div class="sources">
-                        Sources: ${sources.join(', ')}
-                    </div>
+                const sourcesDiv = document.createElement('div');
+                sourcesDiv.className = 'sources';
+                sourcesDiv.innerHTML = `
+                    <p class="font-medium text-gray-700 mb-1">Sources:</p>
+                    <ul class="list-disc list-inside">
+                        ${sources.map(source => `<li>${source}</li>`).join('')}
+                    </ul>
                 `;
+                messageDiv.appendChild(sourcesDiv);
             }
             
-            div.innerHTML = content;
-            chatContainer.appendChild(div);
+            chatContainer.appendChild(messageDiv);
             chatContainer.scrollTop = chatContainer.scrollHeight;
+            return messageDiv.id;
+        }
+
+        function addLoadingMessage() {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'message assistant-message';
+            messageDiv.id = 'loading-' + Date.now();  // Add unique ID
+            messageDiv.innerHTML = '<div class="loading"></div>';
+            chatContainer.appendChild(messageDiv);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+            return messageDiv.id;
+        }
+
+        function removeMessage(id) {
+            if (!id) return;  // Guard against undefined/null IDs
+            const message = document.getElementById(id);
+            if (message) {
+                message.remove();
+            }
         }
 
         // Search functionality
         async function performSearch() {
-            const query = document.getElementById('searchInput').value;
-            if (!query.trim()) return;
-
-            const formData = new FormData();
-            formData.append('query', query);
-
+            const input = document.getElementById('searchInput');
+            const searchType = document.getElementById('searchType');
+            const query = input.value.trim();
+            
+            if (!query) return;
+            
+            const resultsContainer = document.getElementById('searchResults');
+            resultsContainer.innerHTML = '<div class="loading mx-auto"></div>';
+            
             try {
+                const formData = new FormData();
+                formData.append('query', query);
+                formData.append('search_type', searchType.value);
+                
                 const response = await fetch('/search', {
                     method: 'POST',
                     body: formData
                 });
-
+                
                 const data = await response.json();
-                displaySearchResults(data.results);
-
+                
+                resultsContainer.innerHTML = '';
+                
+                if (data.results.length === 0) {
+                    resultsContainer.innerHTML = '<p class="text-gray-500 text-center">No results found</p>';
+                    return;
+                }
+                
+                data.results.forEach(result => {
+                    const resultDiv = document.createElement('div');
+                    resultDiv.className = 'search-result bg-gray-50 p-4 rounded-lg border border-gray-100';
+                    
+                    if (searchType.value === 'filename') {
+                        resultDiv.innerHTML = `
+                            <div class="flex items-center justify-between mb-2">
+                                <span class="text-sm font-medium text-indigo-600">${result.metadata.source}</span>
+                            </div>
+                            <p class="text-gray-800 line-clamp-2">${result.content}</p>
+                        `;
+                    } else {
+                        resultDiv.innerHTML = `
+                            <div class="flex items-center justify-between mb-2">
+                                <span class="text-sm font-medium text-indigo-600">${result.metadata.source}</span>
+                                <span class="text-sm text-gray-500">Score: ${(result.similarity * 100).toFixed(1)}%</span>
+                            </div>
+                            <p class="text-gray-800">${result.content}</p>
+                        `;
+                    }
+                    
+                    resultsContainer.appendChild(resultDiv);
+                });
+                
             } catch (error) {
                 console.error('Search failed:', error);
+                resultsContainer.innerHTML = '<p class="text-red-500 text-center">Search failed. Please try again.</p>';
             }
         }
 
-        function displaySearchResults(results) {
-            const resultsDiv = document.getElementById('searchResults');
-            resultsDiv.innerHTML = '';
-
-            if (results.length === 0) {
-                resultsDiv.innerHTML = '<p class="text-gray-500">No results found.</p>';
-                return;
+        // Load document names
+        async function loadDocumentNames() {
+            try {
+                const response = await fetch('/document-names');
+                const data = await response.json();
+                
+                const documentList = document.getElementById('documentList');
+                const ul = documentList.querySelector('ul');
+                
+                if (data.names && data.names.length > 0) {
+                    ul.innerHTML = data.names.map(name => `<li>${name}</li>`).join('');
+                    documentList.classList.remove('hidden');
+                }
+            } catch (error) {
+                console.error('Failed to load document names:', error);
             }
-
-            results.forEach((result, index) => {
-                const div = document.createElement('div');
-                div.className = 'bg-gray-50 rounded-lg p-4';
-                div.innerHTML = `
-                    <div class="flex items-start space-x-2">
-                        <span class="text-gray-400">${index + 1}.</span>
-                        <div class="flex-1">
-                            <p class="font-medium text-gray-900 mb-1">${result.metadata.source}</p>
-                            <p class="text-gray-600">${result.content}</p>
-                            <p class="text-sm text-gray-400 mt-1">Similarity: ${(result.similarity * 100).toFixed(1)}%</p>
-                        </div>
-                    </div>
-                `;
-                resultsDiv.appendChild(div);
-            });
         }
 
-        // Add enter key handler for question input
-        document.getElementById('questionInput').addEventListener('keypress', function(e) {
+        // Load document names when page loads
+        loadDocumentNames();
+
+        // Add event listener for search type change
+        document.getElementById('searchType').addEventListener('change', function(e) {
+            const documentList = document.getElementById('documentList');
+            if (e.target.value === 'filename') {
+                documentList.classList.remove('hidden');
+            } else {
+                documentList.classList.add('hidden');
+            }
+        });
+
+        // Add enter key handler for search input
+        document.getElementById('searchInput').addEventListener('keypress', function(e) {
             if (e.key === 'Enter') {
-                askQuestion();
+                performSearch();
             }
         });
     </script>
