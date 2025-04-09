@@ -61,7 +61,7 @@ class ChromaDBStore(VectorStore):
                 "data": {"config_path": self._config_path}
             })
             
-            # Load vector store configuration
+            # Load vector store configuration from new path
             vector_store_config = get_component_config("vector_stores.chroma", self._config_path)
             
             # Validate configuration

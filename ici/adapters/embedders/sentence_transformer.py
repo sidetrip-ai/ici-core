@@ -57,8 +57,8 @@ class SentenceTransformerEmbedder(Embedder):
                 "message": "Initializing SentenceTransformer embedder"
             })
             
-            # Load embedder configuration
-            embedder_config = get_component_config("embedder", self._config_path)
+            # Load embedder configuration using the appropriate path in the new structure
+            embedder_config = get_component_config("embedders.sentence_transformer", self._config_path)
             
             # Extract model name with default
             self._model_name = embedder_config.get(

@@ -28,7 +28,7 @@ class Preprocessor(ABC):
         pass
 
     @abstractmethod
-    def preprocess(self, raw_data: Any) -> List[Dict[str, Any]]:
+    async def preprocess(self, raw_data: Any) -> List[Dict[str, Any]]:
         """
         Transforms raw data into a list of standardized documents.
 
