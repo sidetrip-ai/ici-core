@@ -45,6 +45,12 @@ class DataFetchError(IngestorError):
     pass
 
 
+class AuthenticationError(IngestorError):
+    """Raised when authentication fails."""
+
+    pass
+
+
 class PreprocessorError(IngestionError):
     """Raised when preprocessing fails."""
 
@@ -164,6 +170,7 @@ __all__ = [
     "APIAuthenticationError",
     "APIRateLimitError",
     "DataFetchError",
+    "AuthenticationError",
     "PreprocessorError",
     "IngestionPipelineError",
     "QueryError",

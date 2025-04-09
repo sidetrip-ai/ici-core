@@ -11,13 +11,28 @@ import os
 import json
 import inspect
 import traceback
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 from logtail import LogtailHandler
 
 from ici.core.interfaces import Logger
 from ici.core.exceptions import LoggerError
 from ici.utils.config import get_component_config
+
+
+class DateTimeEncoder(json.JSONEncoder):
+    """
+    Custom JSON encoder that can handle datetime objects.
+    
+    This encoder converts datetime objects to ISO 8601 format strings,
+    which are standard for JSON and easily parsed by most systems.
+    """
+    def default(self, obj):
+        if isinstance(obj, datetime):
+            # Convert datetime to ISO format with timezone info
+            return obj.isoformat()
+        # Let the base class handle other types or raise TypeError
+        return super().default(obj)
 
 
 class StructuredLogger(Logger):
@@ -91,7 +106,7 @@ class StructuredLogger(Logger):
             LoggerError: If initialization fails for any reason.
         """
         try:
-            # Load logger configuration
+            # Load logger configuration from new path
             logger_config = get_component_config("loggers.structured_logger", self._config_path) or {}
             
             # Get configuration values with defaults from constructor
@@ -208,8 +223,8 @@ class StructuredLogger(Logger):
                     "traceback": traceback.format_exc().split("\n"),
                 }
 
-            # Convert to JSON
-            json_str = json.dumps(log_entry)
+            # Convert to JSON using custom encoder for datetime objects
+            json_str = json.dumps(log_entry, cls=DateTimeEncoder)
             
             # Add color codes for console output
             if sys.stdout.isatty():  # Only add colors when outputting to a terminal
@@ -219,19 +234,18 @@ class StructuredLogger(Logger):
             return json_str
 
         except Exception as e:
-            print(log_data)
-            print(level)
             # Fallback if formatting fails
             error = f"ERROR formatting log: {str(e)}"
             print(error, file=sys.stderr)
-            print(e)
+            print(f"Original log data: {log_data}", file=sys.stderr)
             return json.dumps(
                 {
                     "timestamp": datetime.now().isoformat(),
                     "level": "ERROR",
                     "message": error,
                     "original_message": str(log_data),
-                }
+                },
+                cls=DateTimeEncoder  # Use custom encoder even in error case
             )
 
     def debug(self, log_data: Dict[str, Any]) -> None:

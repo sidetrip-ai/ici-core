@@ -85,9 +85,53 @@ class TelegramIngestor(Ingestor):
             # Store the entire config for later use
             self._config = telegram_config
             
-            # Set request delay
-            if "request_delay" in telegram_config:
-                self._request_delay = float(telegram_config["request_delay"])
+            # Set fetch limits and options with validation
+            try:
+                # Validate and set max_chats
+                self._max_chats = int(telegram_config.get("max_chats", 100))
+                if self._max_chats != -1 and self._max_chats <= 0:
+                    self.logger.warning({
+                        "action": "CONFIG_WARNING",
+                        "message": "Invalid max_chats value, must be -1 or > 0, using default (100)",
+                        "data": {"provided_value": self._max_chats, "default": 100}
+                    })
+                    self._max_chats = 100
+                
+                # Validate and set max_messages_per_chat
+                self._max_messages_per_chat = int(telegram_config.get("max_messages_per_chat", 100))
+                if self._max_messages_per_chat != -1 and self._max_messages_per_chat <= 0:
+                    self.logger.warning({
+                        "action": "CONFIG_WARNING",
+                        "message": "Invalid max_messages_per_chat value, must be -1 or > 0, using default (100)",
+                        "data": {"provided_value": self._max_messages_per_chat, "default": 100}
+                    })
+                    self._max_messages_per_chat = 100
+                
+                # Validate and set batch_size 
+                self._batch_size = int(telegram_config.get("batch_size", 50))
+                if self._batch_size <= 0:
+                    self.logger.warning({
+                        "action": "CONFIG_WARNING",
+                        "message": "Invalid batch_size value, must be > 0, using default (50)",
+                        "data": {"provided_value": self._batch_size, "default": 50}
+                    })
+                    self._batch_size = 50
+                
+                # Convert all ignored_chats to strings for consistent comparison
+                ignored_chats = telegram_config.get("ignored_chats", [])
+                self._ignored_chats = [str(chat_id) for chat_id in ignored_chats]
+                
+                # Validate and set request delay
+                self._request_delay = float(telegram_config.get("request_delay", 1.0))
+                if self._request_delay < 0.1:
+                    self.logger.warning({
+                        "action": "CONFIG_WARNING",
+                        "message": "Request delay too small, using minimum (0.1s) to avoid rate limits",
+                        "data": {"provided_value": self._request_delay, "minimum": 0.1}
+                    })
+                    self._request_delay = 0.1
+            except (ValueError, TypeError) as e:
+                raise ConfigurationError(f"Invalid configuration parameter: {str(e)}") from e
             
             # Cache session string if available
             if "session_string" in telegram_config:
@@ -95,7 +139,14 @@ class TelegramIngestor(Ingestor):
             
             self.logger.info({
                 "action": "INGESTOR_INITIALIZED",
-                "message": "Telegram ingestor initialized successfully"
+                "message": "Telegram ingestor initialized successfully",
+                "data": {
+                    "max_chats": self._max_chats,
+                    "max_messages_per_chat": self._max_messages_per_chat, 
+                    "batch_size": self._batch_size,
+                    "request_delay": self._request_delay,
+                    "ignored_chats_count": len(self._ignored_chats)
+                }
             })
             
         except Exception as e:
@@ -107,12 +158,24 @@ class TelegramIngestor(Ingestor):
             })
             raise ConfigurationError(error_message) from e
     
-    async def fetch_full_data(self) -> Dict[str, List[Dict[str, Any]]]:
+    async def fetch_full_data(self) -> Dict[str, Any]:
         """
-        Fetch all available direct message conversations and their messages.
+        Fetch all available conversations and their messages with relationship context.
         
         Returns:
-            Dict[str, List[Dict[str, Any]]]: Dictionary containing conversations and messages.
+            Dict[str, Any]: Dictionary containing conversations organized by chat_id with detailed metadata.
+                {
+                    "conversations": {
+                        "chat_id_1": [messages],
+                        "chat_id_2": [messages],
+                        ...
+                    },
+                    "conversation_details": {
+                        "chat_id_1": {conversation metadata},
+                        "chat_id_2": {conversation metadata},
+                        ...
+                    }
+                }
         """
         self.logger.info({
             "action": "FETCH_FULL_DATA_START",
@@ -123,12 +186,16 @@ class TelegramIngestor(Ingestor):
         
         self.logger.info({
             "action": "FETCH_FULL_DATA_COMPLETE",
-            "message": f"Fetched {len(result.get('conversations', []))} conversations"
+            "message": f"Fetched {len(result.get('conversations', {}))} conversations",
+            "data": {
+                "conversation_count": len(result.get('conversations', {})),
+                "conversation_details_count": len(result.get('conversation_details', {}))
+            }
         })
         
         return result
     
-    async def fetch_new_data(self, since: Optional[datetime] = None) -> Dict[str, List[Dict[str, Any]]]:
+    async def fetch_new_data(self, since: Optional[datetime] = None) -> Dict[str, Any]:
         """
         Fetch new message data since the given timestamp.
         
@@ -137,7 +204,19 @@ class TelegramIngestor(Ingestor):
                   If None, defaults to 24 hours ago.
                   
         Returns:
-            Dict[str, List[Dict[str, Any]]]: Dictionary containing conversations and new messages.
+            Dict[str, Any]: Dictionary containing conversations organized by chat_id with detailed metadata.
+                {
+                    "conversations": {
+                        "chat_id_1": [messages],
+                        "chat_id_2": [messages],
+                        ...
+                    },
+                    "conversation_details": {
+                        "chat_id_1": {conversation metadata},
+                        "chat_id_2": {conversation metadata},
+                        ...
+                    }
+                }
         """
         # Default to last 24 hours if no timestamp provided
         if since is None:
@@ -160,13 +239,17 @@ class TelegramIngestor(Ingestor):
         
         self.logger.info({
             "action": "FETCH_NEW_DATA_COMPLETE",
-            "message": f"Fetched data for {len(result.get('conversations', []))} conversations since {since_str}",
-            "data": {"since": since_str}
+            "message": f"Fetched data for {len(result.get('conversations', {}))} conversations since {since_str}",
+            "data": {
+                "since": since_str,
+                "conversation_count": len(result.get('conversations', {})),
+                "conversation_details_count": len(result.get('conversation_details', {}))
+            }
         })
         
         return result
     
-    async def fetch_data_in_range(self, start: datetime, end: datetime) -> Dict[str, List[Dict[str, Any]]]:
+    async def fetch_data_in_range(self, start: datetime, end: datetime) -> Dict[str, Any]:
         """
         Fetch message data within a specific date range.
         
@@ -175,7 +258,19 @@ class TelegramIngestor(Ingestor):
             end: End timestamp for data range.
             
         Returns:
-            Dict[str, List[Dict[str, Any]]]: Dictionary containing conversations and messages in range.
+            Dict[str, Any]: Dictionary containing conversations organized by chat_id with detailed metadata.
+                {
+                    "conversations": {
+                        "chat_id_1": [messages],
+                        "chat_id_2": [messages],
+                        ...
+                    },
+                    "conversation_details": {
+                        "chat_id_1": {conversation metadata},
+                        "chat_id_2": {conversation metadata},
+                        ...
+                    }
+                }
         """
         # Ensure timestamps are timezone aware
         start = ensure_tz_aware(start)
@@ -195,8 +290,13 @@ class TelegramIngestor(Ingestor):
         
         self.logger.info({
             "action": "FETCH_DATA_IN_RANGE_COMPLETE",
-            "message": f"Fetched data for {len(result.get('conversations', []))} conversations in date range",
-            "data": {"start": start_str, "end": end_str}
+            "message": f"Fetched data for {len(result.get('conversations', {}))} conversations in date range",
+            "data": {
+                "start": start_str, 
+                "end": end_str,
+                "conversation_count": len(result.get('conversations', {})),
+                "conversation_details_count": len(result.get('conversation_details', {}))
+            }
         })
         
         return result
@@ -425,56 +525,119 @@ class TelegramIngestor(Ingestor):
             "first_name": me.first_name
         }
     
-    async def _get_conversations(self, client: TelegramClient, limit: int = 100) -> List[Dict[str, Any]]:
+    async def _get_conversations(self, client: TelegramClient, limit: Optional[int] = None) -> List[Dict[str, Any]]:
         """
-        Get a list of direct message conversations.
+        Get a list of conversations with enhanced metadata.
         
         Args:
             client: Connected TelegramClient
-            limit: Maximum number of conversations to fetch
+            limit: Maximum number of conversations to fetch (overrides config if provided)
             
         Returns:
             List[Dict[str, Any]]: List of conversation metadata.
         """
         try:
-            conversations = []
-            offset_date = None
-            offset_id = 0
-            offset_peer = InputPeerUser(0, 0)
+            # Use provided limit or config value
+            if limit is None:
+                limit = self._max_chats
+            
+            # If limit is -1, use None for no limit in Telethon API
+            telethon_limit = None if limit == -1 else limit
+            
+            self.logger.info({
+                "action": "GET_CONVERSATIONS_START",
+                "message": f"Fetching conversations with limit: {limit}",
+                "data": {
+                    "limit": limit,
+                    "ignored_chats_count": len(self._ignored_chats)
+                }
+            })
             
             # Get dialogs (chats/conversations)
-            dialogs = await client.get_dialogs(limit=limit)
+            dialogs = await client.get_dialogs(limit=telethon_limit)
+            
+            # Filter out ignored chats
+            if self._ignored_chats:
+                filtered_dialogs = []
+                for dialog in dialogs:
+                    entity_id = str(dialog.entity.id)
+                    if entity_id not in self._ignored_chats:
+                        filtered_dialogs.append(dialog)
+                    else:
+                        self.logger.info({
+                            "action": "IGNORED_CHAT",
+                            "message": f"Ignoring chat {entity_id} as configured",
+                            "data": {"chat_id": entity_id}
+                        })
+                dialogs = filtered_dialogs
+            
+            # Process dialogs into the expected format
+            conversations = []
             
             for dialog in dialogs:
-                if dialog.is_user:  # Only include direct message chats
-                    entity = dialog.entity
-                    
-                    # Extract the most recent message if available
-                    last_message = None
-                    if dialog.message:
-                        msg = dialog.message
-                        last_message = {
-                            "id": msg.id,
-                            "date": msg.date.isoformat(),
-                            "text": msg.text if hasattr(msg, "text") else "",
-                        }
-                    
-                    # Create conversation metadata
-                    conversation = {
-                        "id": entity.id,
-                        "name": entity.first_name or "",
-                        "username": entity.username or "",
-                        "last_message": last_message,
-                        "last_updated": dialog.date.isoformat() if dialog.date else None,
-                        "total_messages": dialog.unread_count  # This is just unread count, not total
+                entity = dialog.entity
+                
+                # Extract the name based on entity type
+                name = None
+                is_group = False
+                
+                if hasattr(entity, 'title'):
+                    # Channel or group
+                    name = entity.title
+                    is_group = True
+                else:
+                    # User or bot
+                    first_name = getattr(entity, 'first_name', '')
+                    last_name = getattr(entity, 'last_name', '')
+                    if first_name or last_name:
+                        name = f"{first_name} {last_name}".strip()
+                    elif hasattr(entity, 'username'):
+                        name = entity.username
+                
+                # Skip if we couldn't determine a name
+                if not name:
+                    self.logger.warning({
+                        "action": "UNNAMED_ENTITY",
+                        "message": "Skipping entity with no name",
+                        "data": {"entity_id": entity.id if hasattr(entity, 'id') else "unknown"}
+                    })
+                    continue
+                
+                # Get last message info if available
+                last_message = None
+                if dialog.message:
+                    last_message = {
+                        "id": dialog.message.id,
+                        "text": dialog.message.message if hasattr(dialog.message, 'message') else "",
+                        "date": dialog.message.date.isoformat() if dialog.message.date else None
                     }
-                    
-                    conversations.append(conversation)
+                
+                # Create conversation metadata with WhatsApp compatibility
+                conversation = {
+                    "id": entity.id,
+                    "name": name,
+                    "username": entity.username if hasattr(entity, 'username') else None,
+                    "last_message": last_message,
+                    "last_updated": dialog.date.isoformat() if dialog.date else None,
+                    "unread_count": dialog.unread_count,
+                    "is_group": is_group,
+                    "chat_type": "group" if is_group else "private",
+                    "source": "telegram",
+                    # Additional fields for WhatsApp compatibility
+                    "chatId": str(entity.id),  # WhatsApp uses chatId
+                    "isGroup": is_group  # WhatsApp uses isGroup
+                }
+                
+                conversations.append(conversation)
             
-            self.logger.debug({
-                "action": "CONVERSATIONS_FETCHED",
-                "message": f"Fetched {len(conversations)} direct message conversations",
-                "data": {"count": len(conversations)}
+            self.logger.info({
+                "action": "GET_CONVERSATIONS_COMPLETE",
+                "message": f"Fetched {len(conversations)} conversations",
+                "data": {
+                    "conversation_count": len(conversations),
+                    "original_count": len(dialogs),
+                    "filtered_count": len(dialogs) - len(conversations)
+                }
             })
             
             return conversations
@@ -493,26 +656,27 @@ class TelegramIngestor(Ingestor):
             
         except Exception as e:
             self.logger.error({
-                "action": "TELEGRAM_GET_CONVERSATIONS_ERROR",
+                "action": "GET_CONVERSATIONS_ERROR",
                 "message": "Error retrieving conversations",
-                "exception": {
-                    "type": type(e).__name__,
-                    "message": str(e),
+                "data": {
+                    "error": str(e),
+                    "error_type": type(e).__name__,
                     "traceback": traceback.format_exc().splitlines()
                 }
             })
             raise
     
     async def _get_messages(self, client: TelegramClient, conversation_id: int, 
-                        limit: int = 100, min_id: int = None, 
+                        limit: Optional[int] = None, min_id: int = None, 
                         max_id: int = None) -> List[Dict[str, Any]]:
         """
-        Get messages from a specific conversation.
+        Get messages from a specific conversation with full relationship context.
+        Uses batched fetching to manage rate limits and memory usage.
         
         Args:
             client: Connected TelegramClient
             conversation_id: ID of the conversation to fetch messages from.
-            limit: Maximum number of messages to fetch.
+            limit: Maximum number of messages to fetch. If None, uses config value.
             min_id: Minimum message ID (for pagination).
             max_id: Maximum message ID (for pagination).
             
@@ -520,80 +684,147 @@ class TelegramIngestor(Ingestor):
             List[Dict[str, Any]]: List of message data.
         """
         try:
-            messages = []
-            
-            # Get the entity for this conversation
-            entity = await client.get_entity(conversation_id)
+            # Use provided limit or config value
+            if limit is None:
+                limit = self._max_messages_per_chat
+                
             self.logger.info({
-                "action": "TELEGRAM_GET_MESSAGES_ENTITY",
-                "message": f"Fetched entity for conversation {conversation_id}",
+                "action": "GET_MESSAGES_START",
+                "message": f"Getting messages for conversation {conversation_id}",
                 "data": {
-                    # "entity": entity,
+                    "conversation_id": conversation_id,
                     "limit": limit,
                     "min_id": min_id,
                     "max_id": max_id
                 }
             })
             
-            # Get messages from this entity
-            telegram_messages = await client.get_messages(
-                entity,
-                limit=limit
-            )
-
-            # self.logger.info({
-            #     "action": "TELEGRAM_GET_MESSAGES_ENTITY",
-            #     "message": f"Fetched entity for conversation {conversation_id}",
-            #     "data": {"telegram_messages": telegram_messages}
-            # })
+            # Get the entity for this conversation
+            entity = await client.get_entity(conversation_id)
             
-            # Process each message
+            # Fetch messages in batches
+            telegram_messages = await self._fetch_messages_in_batches(client, entity, limit)
+            
+            # Process messages into our format
+            messages = []
+            message_lookup = {}
+            
+            # First pass - create basic message objects and build lookup
             for msg in telegram_messages:
-                # Skip non-text messages for now
-                if not hasattr(msg, 'text') or not msg.text:
+                # Skip messages without dates
+                if msg.date is None:
+                    self.logger.warning({
+                        "action": "NULL_DATE_DETECTED",
+                        "message": f"Message with ID {msg.id} has None date, skipping",
+                        "data": {
+                            "message_id": msg.id,
+                            "conversation_id": conversation_id
+                        }
+                    })
                     continue
                 
-                # Create message object
-                message = {
+                # Extract sender info using a robust approach following Telethon docs
+                sender_id = None
+                sender_name = None
+                
+                # 1. First try using the sender attribute directly (already cached)
+                if hasattr(msg, 'sender') and msg.sender:
+                    sender_id = msg.sender_id
+                    if hasattr(msg.sender, 'first_name'):
+                        sender_name = msg.sender.first_name
+                        if hasattr(msg.sender, 'last_name') and msg.sender.last_name:
+                            sender_name += f" {msg.sender.last_name}"
+                    elif hasattr(msg.sender, 'title'):
+                        sender_name = msg.sender.title
+                # 2. If no sender but we have a sender_id, try alternative lookup methods
+                elif msg.sender_id:
+                    sender_id = msg.sender_id
+                    try:
+                        # Try getting the input entity first (more reliable with fallbacks)
+                        input_entity = await client.get_input_entity(sender_id)
+                        # Then use the input entity to safely get the full entity
+                        sender = await client.get_entity(input_entity)
+                        
+                        if hasattr(sender, 'first_name'):
+                            sender_name = sender.first_name
+                            if hasattr(sender, 'last_name') and sender.last_name:
+                                sender_name += f" {sender.last_name}"
+                        elif hasattr(sender, 'title'):
+                            sender_name = sender.title
+                    except Exception as e:
+                        # 3. Gracefully handle lookup failure with a placeholder
+                        self.logger.warning({
+                            "action": "SENDER_LOOKUP_FAILED",
+                            "message": f"Failed to get info for sender {sender_id}, using placeholder",
+                            "data": {
+                                "sender_id": sender_id,
+                                "error": str(e),
+                                "error_type": type(e).__name__
+                            }
+                        })
+                        # Use a placeholder name rather than failing
+                        sender_name = f"User {sender_id}"
+                
+                # Create message object in the expected format
+                message_obj = {
                     "id": msg.id,
                     "conversation_id": conversation_id,
+                    "text": self._extract_message_text(msg),
                     "date": msg.date.isoformat(),
-                    "text": msg.text,
-                    "from_user": True if msg.out else False,  # True if sent by the user
-                    "sender_id": msg.from_id.user_id if msg.from_id else None,
-                    "sender_name": None,  # Will be filled in later if needed
-                    "reply_to_msg_id": msg.reply_to.reply_to_msg_id if msg.reply_to else None
+                    "timestamp": int(msg.date.timestamp()),
+                    "sender_id": sender_id,
+                    "sender_name": sender_name,
+                    "is_outgoing": msg.out if hasattr(msg, 'out') else False,
+                    "reply_to_id": msg.reply_to.reply_to_msg_id if msg.reply_to else None,
+                    # Fields for WhatsApp compatibility
+                    "messageId": str(msg.id),
+                    "chatId": str(conversation_id)
                 }
-
-                self.logger.info({
-                    "action": "TELEGRAM_GET_MESSAGES_MESSAGE",
-                    "message": f"Fetched message {message['id']} from conversation {conversation_id}",
-                    "data": {"message": message}
-                })
                 
-                messages.append(message)
+                messages.append(message_obj)
+                message_lookup[msg.id] = message_obj
             
-            self.logger.debug({
-                "action": "MESSAGES_FETCHED",
-                "message": f"Fetched {len(messages)} messages from conversation {conversation_id}",
+            # Second pass - establish relationships between messages
+            for message in messages:
+                if message["reply_to_id"]:
+                    # Look up the reply message if it exists in our set
+                    reply_to = message_lookup.get(message["reply_to_id"])
+                    if reply_to:
+                        message["reply_to"] = {
+                            "id": reply_to["id"],
+                            "date": reply_to["date"],
+                            "text": reply_to["text"][:100] + ("..." if len(reply_to["text"]) > 100 else ""),
+                            "sender_name": reply_to["sender_name"]
+                        }
+            
+            self.logger.info({
+                "action": "GET_MESSAGES_COMPLETE",
+                "message": f"Retrieved {len(messages)} messages from conversation {conversation_id}",
                 "data": {
                     "conversation_id": conversation_id,
-                    "message_count": len(messages)
+                    "message_count": len(messages),
+                    "original_count": len(telegram_messages),
+                    "filtered_count": len(telegram_messages) - len(messages)
                 }
             })
             
-            # Add delay to avoid rate limiting
-            await asyncio.sleep(self._request_delay)
-
             return messages
             
         except FloodWaitError as e:
-            # Handle rate limiting
+            # Implement exponential backoff
             wait_time = e.seconds
+            
+            # Add a small buffer to the wait time
+            wait_time = max(wait_time, 1) * 1.1
+            
             self.logger.warning({
                 "action": "RATE_LIMITED",
-                "message": f"Rate limited by Telegram, waiting {wait_time} seconds",
-                "data": {"wait_time": wait_time}
+                "message": f"Rate limited by Telegram, waiting {wait_time:.1f} seconds",
+                "data": {
+                    "conversation_id": conversation_id,
+                    "wait_time": wait_time,
+                    "telegram_seconds": e.seconds
+                }
             })
             await asyncio.sleep(wait_time)
             # Return empty list, caller should retry
@@ -601,12 +832,13 @@ class TelegramIngestor(Ingestor):
             
         except Exception as e:
             self.logger.error({
-                "action": "TELEGRAM_GET_MESSAGES_ERROR",
+                "action": "GET_MESSAGES_ERROR",
                 "message": f"Error retrieving messages from conversation {conversation_id}",
                 "data": {
                     "conversation_id": conversation_id,
                     "error": str(e),
-                    "error_type": type(e).__name__
+                    "error_type": type(e).__name__,
+                    "traceback": traceback.format_exc().splitlines()
                 }
             })
             # Return empty list on error
@@ -614,78 +846,123 @@ class TelegramIngestor(Ingestor):
     
     async def _get_messages_in_date_range(self, client: TelegramClient, conversation_id: int, 
                                      start_date: str, end_date: str, 
-                                     limit: int = 100) -> List[Dict[str, Any]]:
+                                     limit: Optional[int] = None) -> List[Dict[str, Any]]:
         """
-        Get messages from a conversation within a specified date range.
+        Get messages from a conversation within a specified date range with relationship context.
+        Uses batched fetching to manage rate limits and memory usage.
         
         Args:
             client: Connected TelegramClient
             conversation_id: ID of the conversation.
             start_date: Start date in ISO format.
             end_date: End date in ISO format.
-            limit: Maximum number of messages to fetch.
+            limit: Maximum number of messages to fetch. If None, uses config value.
             
         Returns:
-            List[Dict[str, Any]]: List of message data.
+            List[Dict[str, Any]]: List of message data with relationship context.
         """
         try:
+            # Use provided limit or config value
+            if limit is None:
+                limit = self._max_messages_per_chat
+                
             self.logger.info({
-                "action": "WORKING_ON_DATE_RANGE",
-                "message": f"Working on date range: {start_date} to {end_date}",
+                "action": "GET_MESSAGES_DATE_RANGE_START",
+                "message": f"Getting messages in date range: {start_date} to {end_date}",
                 "data": {
+                    "conversation_id": conversation_id,
                     "start_date": start_date,
-                    "end_date": end_date
+                    "end_date": end_date,
+                    "limit": limit
                 }
             })
+            
             # Convert dates to datetime objects
             start_datetime = from_isoformat(start_date)
             end_datetime = from_isoformat(end_date)
 
-            self.logger.info({
-                "action": "WORKING_ON_GET_MESSAGES  ",
-                "message": f"Working on getting messages for conversation {conversation_id}",
-                "data": {
-                    "conversation_id": conversation_id,
-                    "start_date": start_date,
-                    "end_date": end_date
-                }
-            })
-            # Get messages without date filtering first
-            all_messages = await self._get_messages(client, conversation_id, limit=limit)
+            # First get all messages using our optimized fetching method
+            # Use a larger limit since we'll be filtering by date
+            fetch_limit = limit if limit != -1 else -1
+            messages = await self._get_messages(client, conversation_id, limit=fetch_limit)
             
             # Filter by date range
             filtered_messages = []
-            for message in all_messages:
+            skipped_null_dates = 0
+            
+            for message in messages:
+                # Skip messages with no date
+                if message["date"] is None:
+                    skipped_null_dates += 1
+                    continue
+                    
                 message_date = from_isoformat(message["date"])
                 if start_datetime <= message_date <= end_datetime:
                     filtered_messages.append(message)
+                    
+                    # Stop if we've reached the limit
+                    if limit != -1 and len(filtered_messages) >= limit:
+                        break
             
-            self.logger.debug({
-                "action": "MESSAGES_DATE_FILTERED",
+            # Log skipped messages count if any
+            if skipped_null_dates > 0:
+                self.logger.warning({
+                    "action": "NULL_DATES_SKIPPED",
+                    "message": f"Skipped {skipped_null_dates} messages with None date in conversation {conversation_id}",
+                    "data": {
+                        "conversation_id": conversation_id,
+                        "skipped_messages": skipped_null_dates,
+                        "total_messages": len(messages)
+                    }
+                })
+            
+            self.logger.info({
+                "action": "GET_MESSAGES_DATE_RANGE_COMPLETE",
                 "message": f"Filtered {len(filtered_messages)} messages in date range",
                 "data": {
                     "conversation_id": conversation_id,
                     "start_date": start_date,
                     "end_date": end_date,
-                    "message_count": len(filtered_messages)
+                    "filtered_message_count": len(filtered_messages),
+                    "total_message_count": len(messages)
                 }
             })
             
-            # Add delay to avoid rate limiting
-            await asyncio.sleep(self._request_delay)
-            
             return filtered_messages
+            
+        except FloodWaitError as e:
+            # Implement exponential backoff similar to _get_messages
+            wait_time = e.seconds
+            
+            # Add a small buffer to the wait time
+            wait_time = max(wait_time, 1) * 1.1
+            
+            self.logger.warning({
+                "action": "RATE_LIMITED",
+                "message": f"Rate limited by Telegram, waiting {wait_time:.1f} seconds",
+                "data": {
+                    "conversation_id": conversation_id,
+                    "wait_time": wait_time,
+                    "telegram_seconds": e.seconds,
+                    "start_date": start_date,
+                    "end_date": end_date
+                }
+            })
+            await asyncio.sleep(wait_time)
+            # Return empty list, caller should retry
+            return []
             
         except Exception as e:
             self.logger.error({
-                "action": "TELEGRAM_GET_MESSAGES_DATE_RANGE_ERROR",
+                "action": "GET_MESSAGES_DATE_RANGE_ERROR",
                 "message": f"Error retrieving messages in date range for conversation {conversation_id}",
                 "data": {
                     "conversation_id": conversation_id,
                     "start_date": start_date,
                     "end_date": end_date,
                     "error": str(e),
-                    "error_type": type(e).__name__
+                    "error_type": type(e).__name__,
+                    "traceback": traceback.format_exc().splitlines()
                 }
             })
             # Return empty list on error
@@ -693,26 +970,43 @@ class TelegramIngestor(Ingestor):
     
     async def _fetch_all_conversations(self) -> Dict[str, Any]:
         """
-        Fetch all direct message conversations and their messages.
+        Fetch all conversations and their messages with relationship context.
         
         Returns:
-            Dict[str, Any]: Dictionary with conversations and messages.
+            Dict[str, Any]: Dictionary with conversations organized by chat_id
+                {
+                    "conversations": {
+                        "chat_id_1": [messages],
+                        "chat_id_2": [messages],
+                        ...
+                    },
+                    "conversation_details": {
+                        "chat_id_1": {conversation metadata},
+                        "chat_id_2": {conversation metadata},
+                        ...
+                    }
+                }
         """
         async def fetch_operation(client):
+            # Structure similar to WhatsApp ingestor output
             result = {
-                "conversations": [],
-                "messages": []
+                "conversations": {},  # Dictionary of conversation_id -> [messages]
+                "conversation_details": {}  # Dictionary of conversation metadata
             }
             
-            # Get all direct message conversations
+            # Get all conversations
             conversations = await self._get_conversations(client)
-            result["conversations"] = conversations
 
             self.logger.info({
                 "action": "TELEGRAM_FETCH_CONVERSATIONS",
                 "message": f"Fetched {len(conversations)} conversations",
-                "data": {"conversations": conversations}
+                "data": {"conversation_count": len(conversations)}
             })
+            
+            # Store conversation details for metadata access
+            for conversation in conversations:
+                chat_id = str(conversation["id"])
+                result["conversation_details"][chat_id] = conversation
             
             # Get messages from each conversation
             for conversation in conversations:
@@ -730,13 +1024,20 @@ class TelegramIngestor(Ingestor):
                 # Get messages from this conversation
                 messages = await self._get_messages(client, conversation_id)
                 
+                # Skip if no messages
+                if not messages:
+                    continue
+                
                 # Add conversation metadata to each message
                 for message in messages:
                     message["conversation_name"] = conversation["name"]
-                    message["conversation_username"] = conversation["username"]
+                    message["conversation_username"] = conversation.get("username")
                     message["source"] = "telegram"
+                    message["is_group"] = conversation.get("is_group", False)
+                    message["chat_type"] = conversation.get("chat_type", "private")
                 
-                result["messages"].extend(messages)
+                # Store messages organized by conversation ID - similar to WhatsApp structure
+                result["conversations"][str(conversation_id)] = messages
                 
                 # Add delay to avoid rate limiting
                 await asyncio.sleep(self._request_delay)
@@ -755,23 +1056,40 @@ class TelegramIngestor(Ingestor):
             end_date: End date in ISO format.
             
         Returns:
-            Dict[str, Any]: Dictionary with conversations and filtered messages.
+            Dict[str, Any]: Dictionary with conversations organized by chat_id
+                {
+                    "conversations": {
+                        "chat_id_1": [messages],
+                        "chat_id_2": [messages],
+                        ...
+                    },
+                    "conversation_details": {
+                        "chat_id_1": {conversation metadata},
+                        "chat_id_2": {conversation metadata},
+                        ...
+                    }
+                }
         """
         async def fetch_operation(client):
+            # Structure similar to WhatsApp ingestor output
             result = {
-                "conversations": [],
-                "messages": []
+                "conversations": {},  # Dictionary of conversation_id -> [messages]
+                "conversation_details": {}  # Dictionary of conversation metadata
             }
             
-            # Get all direct message conversations
+            # Get all conversations
             conversations = await self._get_conversations(client)
-            result["conversations"] = conversations
 
             self.logger.info({
                 "action": "TELEGRAM_FETCH_CONVERSATIONS",
                 "message": f"Fetched {len(conversations)} conversations",
-                "data": {"conversations": conversations}
+                "data": {"conversation_count": len(conversations)}
             })
+            
+            # Store conversation details for metadata access
+            for conversation in conversations:
+                chat_id = str(conversation["id"])
+                result["conversation_details"][chat_id] = conversation
             
             self.logger.info({
                 "action": "TELEGRAM_FETCH_DATE_RANGE",
@@ -801,10 +1119,13 @@ class TelegramIngestor(Ingestor):
                 # Add conversation metadata to each message
                 for message in messages:
                     message["conversation_name"] = conversation["name"]
-                    message["conversation_username"] = conversation["username"]
+                    message["conversation_username"] = conversation.get("username")
                     message["source"] = "telegram"
+                    message["is_group"] = conversation.get("is_group", False)
+                    message["chat_type"] = conversation.get("chat_type", "private")
                 
-                result["messages"].extend(messages)
+                # Store messages organized by conversation ID - similar to WhatsApp structure
+                result["conversations"][str(conversation_id)] = messages
                 
                 # Add delay to avoid rate limiting
                 await asyncio.sleep(self._request_delay)
@@ -813,3 +1134,176 @@ class TelegramIngestor(Ingestor):
             
         # Execute with a fresh client
         return await self._with_client(fetch_operation)
+
+    async def _fetch_messages_in_batches(self, client: TelegramClient, entity, total_limit: int) -> List[Any]:
+        """
+        Fetch messages in batches to manage rate limiting and memory usage.
+        
+        Args:
+            client: Connected TelegramClient
+            entity: Telegram entity (user, chat, or channel) to fetch messages from
+            total_limit: Maximum number of messages to fetch (-1 for all available)
+            
+        Returns:
+            List of Telegram Message objects
+        """
+        # Get batch size and delay from config
+        batch_size = self._batch_size
+        delay = self._request_delay
+        
+        self.logger.info({
+            "action": "FETCH_MESSAGES_BATCHED_START",
+            "message": f"Fetching messages in batches from {getattr(entity, 'id', 'unknown')}",
+            "data": {
+                "entity_id": getattr(entity, 'id', 'unknown'),
+                "total_limit": total_limit,
+                "batch_size": batch_size,
+                "delay": delay
+            }
+        })
+        
+        all_messages = []
+        offset_id = 0
+        batch_count = 0
+        retry_count = 0
+        max_retries = 5
+        base_delay = self._request_delay
+        
+        while True:
+            try:
+                # Break if we have enough messages
+                if total_limit != -1 and len(all_messages) >= total_limit:
+                    break
+                
+                # Calculate the current batch limit
+                current_limit = batch_size
+                if total_limit != -1:
+                    current_limit = min(batch_size, total_limit - len(all_messages))
+                
+                # Get the next batch of messages
+                batch = await client.get_messages(
+                    entity, 
+                    limit=current_limit,
+                    offset_id=offset_id
+                )
+                
+                # Reset retry count after successful fetch
+                retry_count = 0
+                
+                # Convert to list if it's an iterator
+                batch_list = list(batch)
+                batch_count += 1
+                
+                # Break if no more messages
+                if not batch_list:
+                    self.logger.info({
+                        "action": "FETCH_MESSAGES_BATCH_EMPTY",
+                        "message": "No more messages to fetch, reached end",
+                        "data": {"total_fetched": len(all_messages)}
+                    })
+                    break
+                
+                # Add to our collection
+                all_messages.extend(batch_list)
+                
+                # Update offset for next batch
+                offset_id = batch_list[-1].id
+                
+                self.logger.info({
+                    "action": "FETCH_MESSAGES_BATCH_COMPLETE",
+                    "message": f"Fetched batch {batch_count} ({len(batch_list)} messages)",
+                    "data": {
+                        "batch_number": batch_count,
+                        "batch_size": len(batch_list),
+                        "total_fetched": len(all_messages),
+                        "next_offset_id": offset_id
+                    }
+                })
+                
+                # Delay to respect rate limits
+                await asyncio.sleep(delay)
+                
+            except FloodWaitError as e:
+                # Implement exponential backoff
+                retry_count += 1
+                
+                # Use the longer of Telegram's suggested wait time or our calculated backoff
+                telegram_wait = e.seconds
+                backoff_wait = base_delay * (2 ** retry_count)
+                wait_time = max(telegram_wait, backoff_wait)
+                
+                # Cap maximum wait time at 5 minutes
+                wait_time = min(wait_time, 300)
+                
+                self.logger.warning({
+                    "action": "RATE_LIMITED",
+                    "message": f"Rate limited by Telegram (retry {retry_count}/{max_retries}), waiting {wait_time:.1f} seconds",
+                    "data": {
+                        "telegram_wait": telegram_wait,
+                        "backoff_wait": backoff_wait,
+                        "actual_wait": wait_time,
+                        "retry_count": retry_count,
+                        "entity_id": getattr(entity, 'id', 'unknown')
+                    }
+                })
+                
+                # Sleep for the specified time
+                await asyncio.sleep(wait_time)
+                
+                # If we've exceeded max retries, give up
+                if retry_count >= max_retries:
+                    self.logger.error({
+                        "action": "RATE_LIMIT_MAX_RETRIES",
+                        "message": f"Exceeded maximum retries ({max_retries}) for rate limiting",
+                        "data": {
+                            "entity_id": getattr(entity, 'id', 'unknown'),
+                            "total_fetched": len(all_messages),
+                            "max_retries": max_retries
+                        }
+                    })
+                    break
+                
+                # Continue to retry
+                continue  # Retry after waiting
+                
+            except Exception as e:
+                self.logger.error({
+                    "action": "FETCH_MESSAGES_BATCH_ERROR",
+                    "message": f"Error fetching message batch: {str(e)}",
+                    "data": {
+                        "entity_id": getattr(entity, 'id', 'unknown'),
+                        "error": str(e),
+                        "error_type": type(e).__name__,
+                        "total_fetched": len(all_messages)
+                    }
+                })
+                break  # Stop on error
+        
+        self.logger.info({
+            "action": "FETCH_MESSAGES_BATCHED_COMPLETE",
+            "message": f"Completed fetching {len(all_messages)} messages in {batch_count} batches",
+            "data": {
+                "entity_id": getattr(entity, 'id', 'unknown'),
+                "total_messages": len(all_messages),
+                "batch_count": batch_count
+            }
+        })
+        
+        return all_messages
+
+    def _extract_message_text(self, msg):
+        """
+        Extract message text from a Telegram message object.
+        
+        Args:
+            msg: Telegram message object
+            
+        Returns:
+            str: Extracted message text
+        """
+        if hasattr(msg, 'message') and msg.message:
+            return msg.message
+        elif hasattr(msg, 'caption') and msg.caption:
+            return msg.caption
+        else:
+            return ""
