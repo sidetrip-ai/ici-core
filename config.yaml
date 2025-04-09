@@ -3,7 +3,7 @@ system:
   loggers:
     structured_logger:
       console_output: true
-      level: ERROR
+      level: WARNING
       log_file: ./logs/structured_logger.log
       name: structured_logger
       source_token: $SOURCE_TOKEN
@@ -66,8 +66,8 @@ orchestrator:
     memory:
       k: 5
       type: buffer
-    model: deepseek/deepseek-chat-v3-0324:free
-    provider: openrouter
+    model: deepseek-r1:32b
+    provider: ollama
     type: langchain
   
   embedder:
@@ -78,6 +78,7 @@ orchestrator:
   
   vector_store:
     chroma:
+      type: chroma
       collection_name: messages
       embedding_function: sentence_transformer
       persist_directory: ./db/vector/chroma_db
@@ -90,21 +91,31 @@ orchestrator:
   # Pipeline configurations
   pipelines:
     telegram:
-      batch_size: 100
       schedule:
         interval_minutes: 1
       ingestor:
         telegram:
+          # Telegram API credentials
           api_hash: $TELEGRAM_API_HASH
           api_id: $TELEGRAM_API_ID
           phone_number: $TELEGRAM_PHONE_NUMBER
-          request_delay: 0.5
           session_string: $TELEGRAM_SESSION_STRING
+          
+          # Chat and message limits
+          max_chats: 100            # Maximum number of chats to fetch (-1 for all available)
+          max_messages_per_chat: 200  # Maximum messages per chat (-1 for all available)
+          ignored_chats: []         # List of chat IDs to exclude from fetching
+          
+          # Rate limiting and batching settings
+          batch_size: 50            # Number of messages to fetch in each request
+          request_delay: 1.0        # Delay between batched requests in seconds
       preprocessor:
         chunk_size: 512
         include_overlap: true
         max_messages_per_chunk: 10
         time_window_minutes: 15
+        store_chat_history: true
+        chat_history_dir: "db/telegram_chats"
     
     whatsapp:
       batch_size: 100
