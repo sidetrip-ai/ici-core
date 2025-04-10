@@ -27,11 +27,12 @@ class TelegramPreprocessor(Preprocessor):
     by grouping them into time-based windows and formatting them as conversations.
     """
     
-    def __init__(self, logger_name: str = "telegram_preprocessor"):
+    def __init__(self, ingestor=None, logger_name: str = "telegram_preprocessor"):
         """
         Initialize the TelegramPreprocessor.
         
         Args:
+            ingestor: Optional Telegram ingestor to get user information from
             logger_name: Name for the logger instance
         """
         self.logger = StructuredLogger(name=logger_name)
@@ -44,9 +45,13 @@ class TelegramPreprocessor(Preprocessor):
         self._max_messages_per_chunk = 10
         self._include_overlap = True
         
+        # User identification
+        self._my_user_id = None  # The user's Telegram ID for identifying "Me" messages
+        self._ingestor = ingestor
+        
         # Chat history storage settings
         self._store_chat_history = True
-        self._chat_history_dir = "db/telegram_chats"
+        self._chat_history_dir = None
         self._lock = asyncio.Lock()  # For thread safety
     
     async def initialize(self) -> None:
@@ -77,12 +82,40 @@ class TelegramPreprocessor(Preprocessor):
                 self._max_messages_per_chunk = int(preprocessor_config.get("max_messages_per_chunk", 10))
                 self._include_overlap = bool(preprocessor_config.get("include_overlap", True))
                 
+                # Extract user identification - prioritize ingestor if available
+                if self._ingestor:
+                    try:
+                        ingestor_user_id = self._ingestor.get_current_user_id()
+                        if ingestor_user_id:
+                            self._my_user_id = ingestor_user_id
+                            self.logger.info({
+                                "action": "PREPROCESSOR_USER_ID_FROM_INGESTOR",
+                                "message": "User ID obtained from ingestor",
+                                "data": {"my_user_id": self._my_user_id}
+                            })
+                    except Exception as e:
+                        self.logger.warning({
+                            "action": "PREPROCESSOR_USER_ID_INGESTOR_ERROR",
+                            "message": f"Error getting user ID from ingestor: {str(e)}",
+                            "data": {"error": str(e)}
+                        })
+                
+                # As a fallback, try to get from config (deprecated)
+                if not self._my_user_id:
+                    self._my_user_id = preprocessor_config.get("my_user_id", None)
+                    if self._my_user_id:
+                        self.logger.info({
+                            "action": "PREPROCESSOR_USER_ID_FROM_CONFIG",
+                            "message": "User ID set from config (deprecated)",
+                            "data": {"my_user_id": self._my_user_id}
+                        })
+                
                 # Extract chat history storage settings
                 if "store_chat_history" in preprocessor_config:
                     self._store_chat_history = bool(preprocessor_config.get("store_chat_history"))
                 
                 if "chat_history_dir" in preprocessor_config:
-                    self._chat_history_dir = preprocessor_config.get("chat_history_dir")
+                    self._chat_history_dir = preprocessor_config.get("chat_history_dir", os.path.join("db", "telegram", "chats"))
                 
                 # Create chat history directory if storage is enabled
                 if self._store_chat_history:
@@ -97,7 +130,8 @@ class TelegramPreprocessor(Preprocessor):
                         "max_messages_per_chunk": self._max_messages_per_chunk,
                         "include_overlap": self._include_overlap,
                         "store_chat_history": self._store_chat_history,
-                        "chat_history_dir": self._chat_history_dir
+                        "chat_history_dir": self._chat_history_dir,
+                        "my_user_id": self._my_user_id
                     }
                 })
                 
@@ -418,83 +452,109 @@ class TelegramPreprocessor(Preprocessor):
     
     def _format_conversation(self, messages: List[Dict[str, Any]]) -> str:
         """
-        Format a group of messages into a conversation text with rich context.
+        Format a group of messages as a conversation.
         
         Args:
-            messages: List of messages to format
+            messages: List of Telegram message dictionaries
             
         Returns:
-            Formatted conversation text with metadata and context
+            str: Formatted conversation text
         """
         if not messages:
             return ""
-        
-        # Get chat metadata from the first message
-        first_msg = messages[0]
-        chat_name = first_msg.get("conversation_name", "Unknown Chat")
-        chat_type = first_msg.get("chat_type", "private")
-        is_group = first_msg.get("is_group", False)
-        
-        # Start with a metadata header
-        formatted_lines = [
-            f"(chatname: {chat_name} chattype: {chat_type} source: telegram messages: {len(messages)})"
-        ]
-        
-        # Track active speaker
-        current_sender = None
-        
-        # Format each message with sender and relationship context
-        for i, message in enumerate(messages):
-            # Get sender information
-            sender_name = message.get("sender_name")
-            if not sender_name:
-                sender_name = message.get("conversation_username") or message.get("conversation_name") or "Unknown"
             
-            # Get formatted date
-            date_str = "Unknown date"
-            if message.get("date"):
-                try:
-                    date_obj = datetime.fromisoformat(message.get("date"))
-                    date_str = date_obj.strftime("%Y-%m-%d %H:%M:%S")
-                except:
-                    pass
+        formatted_lines = []
+        
+        for message in messages:
+            # Skip service messages
+            if message.get("action", {}).get("type") in ["chat_add_user", "chat_del_user", "phone_call"]:
+                continue
             
-            # Check if this is a reply
-            is_reply = message.get("is_reply", False)
-            replied_to = message.get("replied_to_message", {})
+            # Extract basic message properties
+            sender_name = message.get("sender_name", "Unknown")
+            from_id = message.get("from_id", "")
+            text = message.get("text", "")
+            chat_name = message.get("conversation_name", "Unknown Chat")
+            chat_type = message.get("chat_type", "private")
             
-            # Add message prefix with sender and datetime
-            if sender_name != current_sender or is_reply:
-                # Add reply context if applicable
-                if is_reply and replied_to:
-                    replied_text = replied_to.get("text", "")
-                    # Truncate long replied text
-                    if len(replied_text) > 50:
-                        replied_text = replied_text[:47] + "..."
-                    replied_sender = replied_to.get("sender_name", "Someone")
+            # Format timestamp
+            timestamp = ""
+            try:
+                if message.get("date"):
+                    dt = datetime.fromisoformat(message.get("date"))
+                    timestamp = dt.strftime("%Y-%m-%d %H:%M:%S")
+            except Exception:
+                timestamp = "Unknown time"
+            
+            # Check if this message is from the user themselves
+            is_me = self._my_user_id and str(from_id) == str(self._my_user_id)
+            
+            # Use "Me" as the display name if it's the user's message
+            display_name = "Me" if is_me else sender_name
+            
+            # Handle forwarded messages
+            if message.get("forwarded_from"):
+                forwarded_from = message.get("forwarded_from")
+                text = f"[Forwarded from {forwarded_from}] {text}"
+            
+            # Add media descriptions if present
+            media_info = ""
+            if message.get("media_type"):
+                media_type = message.get("media_type")
+                
+                if media_type == "sticker":
+                    emoji = message.get("sticker_emoji", "")
+                    media_info += f" [Sticker{': ' + emoji if emoji else ''}]"
                     
-                    formatted_lines.append(f"{sender_name} [replying to {replied_sender}: {replied_text}] ({date_str}):")
-                else:
-                    formatted_lines.append(f"{sender_name} ({date_str}):")
+                elif media_type in ["photo", "video", "document", "audio", "voice"]:
+                    # Add file name if available
+                    file_name = message.get("file_name", "")
+                    if file_name:
+                        media_info += f" [File: {file_name}]"
+                    else:
+                        media_info += f" [{media_type.capitalize()}]"
+                
+                # Add caption if present
+                if message.get("caption"):
+                    media_info += f" Caption: {message.get('caption')}"
+            
+            # Special handling for replies
+            reply_info = ""
+            if message.get("reply_to_message_id"):
+                reply_id = message.get("reply_to_message_id")
+                
+                # Try to find the message being replied to
+                replied_to_message = None
+                for m in messages:
+                    if m.get("id") == reply_id:
+                        replied_to_message = m
+                        break
+                
+                # Add reply information if found
+                if replied_to_message:
+                    reply_sender = replied_to_message.get("sender_name", "Unknown")
                     
-                current_sender = sender_name
+                    # Check if the replied message is from the user themselves
+                    reply_is_me = self._my_user_id and str(replied_to_message.get("from_id", "")) == str(self._my_user_id)
+                    reply_display_name = "Me" if reply_is_me else reply_sender
+                    
+                    reply_preview = replied_to_message.get("text", "")
+                    
+                    # Truncate long reply previews
+                    if len(reply_preview) > 30:
+                        reply_preview = reply_preview[:30] + "..."
+                    
+                    reply_info = f" [In reply to {reply_display_name}: \"{reply_preview}\"]"
             
-            # Add message text with proper indentation
-            message_text = message.get("text", "")
-            if message_text is None:
-                message_text = ""
-            message_text = message_text.strip()
+            # Combine text with media and reply info
+            full_text = text + media_info + reply_info
             
-            if message_text:
-                if current_sender == sender_name and not is_reply:
-                    # Continue previous speaker's messages with indentation
-                    formatted_lines.append(f"  {message_text}")
-                else:
-                    # First line after speaker change has no indentation
-                    formatted_lines.append(f"{message_text}")
+            # Format in the specified structure
+            formatted_message = f"(author is {display_name}, datetime is {timestamp}, source is telegram, chatname is {chat_name} and chattype: {chat_type}) message is - {full_text}"
+            formatted_lines.append(formatted_message)
         
-        # Join lines with newlines
-        return "\n".join(formatted_lines)
+        # Join all formatted lines into a single conversation text
+        return "\n\n".join(formatted_lines)
     
     def _create_metadata(self, messages: List[Dict[str, Any]]) -> Dict[str, Any]:
         """

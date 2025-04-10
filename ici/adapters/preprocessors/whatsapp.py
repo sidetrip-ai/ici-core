@@ -9,6 +9,7 @@ import asyncio
 from datetime import datetime, timezone, timedelta
 from typing import Any, Dict, List, Optional, Set
 
+import time
 from ici.core.interfaces.preprocessor import Preprocessor
 from ici.adapters.loggers import StructuredLogger
 from ici.core.exceptions import PreprocessorError
@@ -17,29 +18,39 @@ from ici.utils.config import get_component_config, load_config
 
 class WhatsAppPreprocessor(Preprocessor):
     """
-    Preprocesses raw WhatsApp message data into a standardized document format.
+    Preprocessor for WhatsApp messages.
     
-    This preprocessor transforms raw WhatsApp messages into a format suitable
-    for embedding and storage in the vector database.
+    This preprocessor transforms raw WhatsApp data into standardized documents
+    with appropriate context windows.
     """
     
-    def __init__(self, logger_name: str = "whatsapp_preprocessor"):
+    def __init__(self, ingestor=None, logger_name: str = "whatsapp_preprocessor"):
         """
         Initialize the WhatsApp preprocessor.
         
         Args:
+            ingestor: Optional WhatsApp ingestor to get user information from
             logger_name: Name for the logger instance
         """
         self.logger = StructuredLogger(name=logger_name)
-        self._config = None
-        self._chunk_size = 512
-        self._include_overlap = True
-        self._max_messages_per_chunk = 10
+        self._config_path = os.environ.get("ICI_CONFIG_PATH", "config.yaml")
+        
+        # Chunking parameters with defaults
         self._time_window_minutes = 15
-        self._config_path = None
+        self._chunk_size = 512
+        self._max_messages_per_chunk = 10
+        self._include_overlap = True
+        
+        # User identification
+        self._my_user_id = None
+        self._ingestor = ingestor
+        
+        # Chat history storage
         self._store_chat_history = True
-        self._chat_history_dir = "whatsapp_chats"
-        self._lock = asyncio.Lock()
+        self._chat_history_dir = None
+        
+        self._is_initialized = False
+        self._lock = asyncio.Lock()  # For thread safety
     
     async def initialize(self) -> None:
         """
@@ -52,56 +63,100 @@ class WhatsAppPreprocessor(Preprocessor):
             PreprocessorError: If initialization fails
         """
         try:
-            # Load config from file
-            self._config_path = self._config_path or "config.yaml"
-            whatsapp_config = get_component_config("preprocessors.whatsapp", self._config_path)
+            self.logger.info({
+                "action": "PREPROCESSOR_INIT_START",
+                "message": "Initializing WhatsApp preprocessor"
+            })
             
-            if whatsapp_config:
-                # Apply configuration settings
-                if "chunk_size" in whatsapp_config:
-                    self._chunk_size = int(whatsapp_config["chunk_size"])
+            # Load configuration parameters if available
+            try:
+                preprocessor_config = get_component_config("preprocessors.whatsapp", self._config_path)
                 
-                if "include_overlap" in whatsapp_config:
-                    self._include_overlap = bool(whatsapp_config["include_overlap"])
+                # Extract chunking parameters with defaults
+                self._time_window_minutes = int(preprocessor_config.get("time_window_minutes", 15))
+                self._chunk_size = int(preprocessor_config.get("chunk_size", 512))
+                self._max_messages_per_chunk = int(preprocessor_config.get("max_messages_per_chunk", 10))
+                self._include_overlap = bool(preprocessor_config.get("include_overlap", True))
                 
-                if "max_messages_per_chunk" in whatsapp_config:
-                    self._max_messages_per_chunk = int(whatsapp_config["max_messages_per_chunk"])
+                # Extract user identification - prioritize ingestor if available
+                if self._ingestor:
+                    try:
+                        ingestor_user_id = self._ingestor.get_current_user_id()
+                        print("--------------------------------")
+                        print("ingestor_user_id")
+                        print(ingestor_user_id)
+                        print("--------------------------------")
+                        if ingestor_user_id:
+                            self._my_user_id = ingestor_user_id
+                            self.logger.info({
+                                "action": "PREPROCESSOR_USER_ID_FROM_INGESTOR",
+                                "message": "User ID obtained from ingestor",
+                                "data": {"my_user_id": self._my_user_id}
+                            })
+                    except Exception as e:
+                        self.logger.warning({
+                            "action": "PREPROCESSOR_USER_ID_INGESTOR_ERROR",
+                            "message": f"Error getting user ID from ingestor: {str(e)}",
+                            "data": {"error": str(e)}
+                        })
                 
-                if "time_window_minutes" in whatsapp_config:
-                    self._time_window_minutes = int(whatsapp_config["time_window_minutes"])
+                # As a fallback, try to get from config (deprecated)
+                if not self._my_user_id:
+                    self._my_user_id = preprocessor_config.get("my_user_id", None)
+                    if self._my_user_id:
+                        self.logger.info({
+                            "action": "PREPROCESSOR_USER_ID_FROM_CONFIG",
+                            "message": "User ID set from config (deprecated)",
+                            "data": {"my_user_id": self._my_user_id}
+                        })
                 
-                # Chat history storage settings
-                if "store_chat_history" in whatsapp_config:
-                    self._store_chat_history = bool(whatsapp_config["store_chat_history"])
+                # Extract chat history storage settings
+                if "store_chat_history" in preprocessor_config:
+                    self._store_chat_history = bool(preprocessor_config.get("store_chat_history"))
                 
-                if "chat_history_dir" in whatsapp_config:
-                    self._chat_history_dir = whatsapp_config["chat_history_dir"]
+                if "chat_history_dir" in preprocessor_config:
+                    self._chat_history_dir = preprocessor_config.get("chat_history_dir", os.path.join("db", "whatsapp", "chats"))
+
+                # Create chat history directory if storage is enabled
+                if self._store_chat_history:
+                    os.makedirs(self._chat_history_dir, exist_ok=True)
+
+                self.logger.info({
+                    "action": "PREPROCESSOR_CONFIG_LOADED",
+                    "message": "Loaded preprocessor configuration",
+                    "data": {
+                        "time_window_minutes": self._time_window_minutes,
+                        "chunk_size": self._chunk_size,
+                        "max_messages_per_chunk": self._max_messages_per_chunk,
+                        "include_overlap": self._include_overlap,
+                        "store_chat_history": self._store_chat_history,
+                        "chat_history_dir": self._chat_history_dir,
+                        "my_user_id": self._my_user_id
+                    }
+                })
+                
+            except Exception as e:
+                # Use defaults if configuration loading fails
+                self.logger.warning({
+                    "action": "PREPROCESSOR_CONFIG_ERROR",
+                    "message": f"Failed to load configuration: {str(e)}. Using defaults.",
+                    "data": {"error": str(e)}
+                })
             
-            # Create chat history directory if storage is enabled
-            if self._store_chat_history:
-                os.makedirs(self._chat_history_dir, exist_ok=True)
+            self._is_initialized = True
             
             self.logger.info({
-                "action": "PREPROCESSOR_INITIALIZED",
-                "message": "WhatsApp preprocessor initialized successfully",
-                "data": {
-                    "chunk_size": self._chunk_size,
-                    "include_overlap": self._include_overlap,
-                    "max_messages_per_chunk": self._max_messages_per_chunk,
-                    "time_window_minutes": self._time_window_minutes,
-                    "store_chat_history": self._store_chat_history,
-                    "chat_history_dir": self._chat_history_dir
-                }
+                "action": "PREPROCESSOR_INIT_SUCCESS",
+                "message": "WhatsApp preprocessor initialized successfully"
             })
             
         except Exception as e:
-            error_message = f"Failed to initialize WhatsApp preprocessor: {str(e)}"
             self.logger.error({
-                "action": "INITIALIZATION_ERROR",
-                "message": error_message,
+                "action": "PREPROCESSOR_INIT_ERROR",
+                "message": f"Failed to initialize WhatsApp preprocessor: {str(e)}",
                 "data": {"error": str(e), "error_type": type(e).__name__}
             })
-            raise PreprocessorError(error_message) from e
+            raise PreprocessorError(f"Preprocessor initialization failed: {str(e)}") from e
     
     async def preprocess(self, raw_data: Any) -> List[Dict[str, Any]]:
         """
@@ -213,35 +268,48 @@ class WhatsAppPreprocessor(Preprocessor):
             # Get context window (-2/+2 messages)
             start_idx = max(0, i - 2)
             end_idx = min(len(sorted_messages), i + 3)  # +3 because end index is exclusive
-            context_window = sorted_messages[start_idx:end_idx]
+            context_window = sorted_messages[start_idx:end_idx]                                                                                                 
             
-            # Format the current message with its context
+            # Ensure messages have required fields for formatting
+            formatted_context = []
+            for msg in context_window:
+                # Create a copy to avoid modifying the original messages
+                formatted_msg = msg.copy()
+                
+                # Ensure chat_name is included
+                if "chat_name" not in formatted_msg:
+                    formatted_msg["chat_name"] = chat_name
+                
+                # Extract and add sender info
+                if "sender_name" not in formatted_msg:
+                    formatted_msg["sender_name"] = self._extract_author(msg)
+                
+                # Add sender_id for Me identification
+                if "sender_id" not in formatted_msg:
+                    if msg.get("fromMe"):
+                        formatted_msg["sender_id"] = self._my_user_id
+                
+                # Convert body to text for formatting
+                if "text" not in formatted_msg and "body" in msg:
+                    formatted_msg["text"] = msg["body"].strip()
+                
+                # Add chat type
+                if "chat_type" not in formatted_msg:
+                    formatted_msg["chat_type"] = chat_type
+                
+                formatted_context.append(formatted_msg)
+            
+            # Use _format_conversation to get formatted text
+            formatted_text = self._format_conversation(formatted_context)
+            
+            # Extract metadata from the main message
             main_author = self._extract_author(current_message)
             main_timestamp = self._extract_timestamp(current_message)
             main_datetime = self._format_datetime(main_timestamp)
-            main_body = current_message.get("body", "").strip()
-            
-            # Create the embedding text with metadata prefix for the main message
-            embedding_text = f"(author: {main_author} datetime: {main_datetime} source: whatsapp chatname: {chat_name} chattype: {chat_type}) {main_body}\n\n"
-            
-            # Add context messages
-            embedding_text += "Context:\n"
-            for j, msg in enumerate(context_window):
-                if j == (i - start_idx):  # Skip adding the main message again
-                    continue
-                    
-                context_author = self._extract_author(msg)
-                context_timestamp = self._extract_timestamp(msg)
-                context_datetime = self._format_datetime(context_timestamp)
-                context_body = msg.get("body", "").strip()
-                
-                # Add direction indicator (before/after)
-                direction = "before" if j < (i - start_idx) else "after"
-                embedding_text += f"[{direction}] {context_author}: {context_body}\n"
             
             # Create document with metadata
             document = {
-                "text": embedding_text,
+                "text": formatted_text,
                 "metadata": {
                     "source": "whatsapp",
                     "chat_id": chat_id,
@@ -524,4 +592,55 @@ class WhatsAppPreprocessor(Preprocessor):
             "healthy": is_healthy,
             "message": message,
             "details": details
-        } 
+        }
+
+    def _format_conversation(self, messages: List[Dict[str, Any]]) -> str:
+        """
+        Format a group of messages as a conversation.
+        
+        Args:
+            messages: List of WhatsApp message dictionaries
+            
+        Returns:
+            str: Formatted conversation text
+        """
+        if not messages:
+            return ""
+        
+        formatted_lines = []
+        
+        # Get chat metadata
+        chat_name = messages[0].get("chat_name", "Unknown Chat")
+        chat_type = messages[0].get("chat_type", "private")
+        
+        # Format each message
+        for message in messages:
+            # Extract message details
+            sender_id = message.get("sender_id", "")
+            sender_name = message.get("sender_name", "Unknown")
+            text = message.get("text", "")
+            timestamp = message.get("timestamp", "")
+            
+            # Format timestamp 
+            formatted_time = self._format_datetime(timestamp)
+            
+            # Check if message is from the user themselves
+            is_me = self._my_user_id and str(sender_id) == str(self._my_user_id)
+            display_name = "Me" if is_me else sender_name
+            
+            # Format in the specified structure
+            formatted_message = f"(author is {display_name}, datetime is {formatted_time}, source is whatsapp, chatname is {chat_name} and chattype: {chat_type}) message is - {text}"
+            formatted_lines.append(formatted_message)
+            
+            # Add media information if present
+            if message.get("has_media", False):
+                media_type = message.get("media_type", "unknown")
+                media_caption = message.get("media_caption", "")
+                
+                media_info = f"[{media_type.capitalize()} attachment]"
+                if media_caption:
+                    media_info += f" Caption: {media_caption}"
+                
+                formatted_lines.append(f"  {media_info}")
+        
+        return "\n\n".join(formatted_lines) 

@@ -54,7 +54,7 @@ class TelegramIngestor(Ingestor):
         
         # User info properties
         self._user_info = None
-        self._user_info_file = os.path.join("db", "telegram", "user_info.json")
+        self._user_info_file = None
     
     async def initialize(self) -> None:
         """
@@ -140,6 +140,8 @@ class TelegramIngestor(Ingestor):
             # Cache session string if available
             if "session_string" in telegram_config:
                 self._session_string = telegram_config["session_string"]
+            
+            self._user_info_file = telegram_config.get("user_info_file", os.path.join("db", "telegram", "user_info.json"))
             
             # Load cached user info
             await self._load_user_info()

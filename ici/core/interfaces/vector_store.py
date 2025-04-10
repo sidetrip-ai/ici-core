@@ -29,7 +29,7 @@ class VectorStore(ABC):
         pass
 
     @abstractmethod
-    def store_documents(self, documents: List[Dict[str, Any]]) -> None:
+    async def store_documents(self, documents: List[Dict[str, Any]]) -> None:
         """
         Stores documents with their vectors, text, and metadata.
 
@@ -47,7 +47,7 @@ class VectorStore(ABC):
         pass
 
     @abstractmethod
-    def search(
+    async def search(
         self,
         query_vector: List[float],
         num_results: int = 5,
@@ -79,7 +79,7 @@ class VectorStore(ABC):
         pass
 
     @abstractmethod
-    def delete(
+    async def delete(
         self,
         document_ids: Optional[List[str]] = None,
         filters: Optional[Dict[str, Any]] = None,
@@ -100,7 +100,7 @@ class VectorStore(ABC):
         pass
 
     @abstractmethod
-    def count(self, filters: Optional[Dict[str, Any]] = None) -> int:
+    async def count(self, filters: Optional[Dict[str, Any]] = None) -> int:
         """
         Counts documents in the vector store, optionally filtered by metadata.
 
@@ -134,7 +134,7 @@ class VectorStore(ABC):
         pass
 
     @abstractmethod
-    def add_documents(
+    async def add_documents(
         self, documents: List[Dict[str, Any]], vectors: List[List[float]]
     ) -> List[str]:
         """

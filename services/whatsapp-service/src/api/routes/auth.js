@@ -130,4 +130,36 @@ router.post('/logout', async (req, res) => {
   }
 });
 
+/**
+ * GET /api/user-info
+ * Get information about the currently authenticated user
+ */
+router.get('/user-info', async (req, res) => {
+  let userInfo;
+  try {
+    // Check if client is connected
+    const status = whatsAppClient.getStatus();
+    if (status.status !== 'CONNECTED') {
+      return res.status(400).json({
+        success: false,
+        message: `WhatsApp is not connected. Current status: ${status.status}`
+      });
+    }
+    
+    // Get user info
+    userInfo = await whatsAppClient.getUserInfo();
+    
+    res.json({
+      success: true,
+      user: userInfo
+    });
+  } catch (error) {
+    console.error('Error getting user info:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to get user info'
+    });
+  }
+});
+
 module.exports = router; 

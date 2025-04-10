@@ -276,6 +276,39 @@ class WhatsAppClient {
   }
 
   /**
+   * Get current user information
+   * @returns {Promise<Object>} User info
+   */
+  async getUserInfo() {
+    if (!this.initialized || this.status !== 'CONNECTED') {
+      throw new Error(`WhatsApp session not connected. Current status: ${this.status}`);
+    }
+
+    try {
+      // Get the user info directly from the client.info property
+      const info = this.client.info;
+      
+      // Ensure we have the necessary data
+      if (!info || !info.wid) {
+        throw new Error('User information not available');
+      }
+      
+      return {
+        id: info.wid._serialized,
+        name: info.pushname || 'Unknown',
+        platform: info.platform || 'unknown',
+        isMe: true,
+        // Additional details that might be available
+        phone: info.wid.user,
+        device: info.platform
+      };
+    } catch (error) {
+      console.error('Error getting user info:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Format a WhatsApp message into a standardized format
    * @param {Object} msg WhatsApp message object
    * @returns {Object} Formatted message

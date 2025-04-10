@@ -8,7 +8,9 @@ registry system.
 
 import asyncio
 import os
-from datetime import datetime, timezone
+import json
+import traceback
+from datetime import datetime, timezone, timedelta
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 from ici.core.interfaces import IngestionPipeline
@@ -39,21 +41,23 @@ class DefaultIngestionPipeline(IngestionPipeline):
     - WhatsApp
     """
     
-    def __init__(self, logger_name: str = "default_ingestion_pipeline"):
+    def __init__(self, logger_name: str = "default_ingestion_pipeline", vector_store: Optional[VectorStore] = None):
         """
         Initialize the DefaultIngestionPipeline.
         
         Args:
-            logger_name: Name for the logger instance
+            logger_name: Name to use for the logger
+            vector_store: Optional existing vector store instance to use
         """
         self.logger = StructuredLogger(name=logger_name)
         self._is_initialized = False
         self._config_path = os.environ.get("ICI_CONFIG_PATH", "config.yaml")
+        self._config = {}
         
         # Components
         self._embedder = None
-        self._vector_store = None
-        self._state_manager = None
+        self._vector_store = vector_store  # Use provided vector store if available
+        self._state_manager = None  # Initialize to None, will be properly set in initialize()
         
         # Ingestor registry - maps ingestor IDs to their components
         self._ingestors = {}
@@ -64,13 +68,12 @@ class DefaultIngestionPipeline(IngestionPipeline):
     
     async def initialize(self) -> None:
         """
-        Initialize the pipeline with configuration parameters.
+        Initialize the ingestion pipeline with configuration parameters.
         
         This method loads the various components needed for the pipeline:
         - Ingestors (Telegram, WhatsApp)
         - Preprocessors
         - Embedder
-        - Vector Store
         - State Manager
         
         Returns:
@@ -84,12 +87,20 @@ class DefaultIngestionPipeline(IngestionPipeline):
             
         try:
             self.logger.info({
-                "action": "PIPELINE_INITIALIZING",
-                "message": "Initializing default ingestion pipeline"
+                "action": "PIPELINE_INIT_START",
+                "message": "Initializing ingestion pipeline"
             })
             
             # Load configuration
-            config = load_config(self._config_path)
+            try:
+                self._config = load_config(self._config_path)
+            except Exception as e:
+                self.logger.warning({
+                    "action": "PIPELINE_CONFIG_WARNING",
+                    "message": f"Failed to load configuration: {str(e)}. Using defaults.",
+                    "data": {"error": str(e)}
+                })
+                self._config = {}
             
             # Get pipeline specific config if available
             pipeline_config = get_component_config("pipelines.default", self._config_path)
@@ -103,18 +114,32 @@ class DefaultIngestionPipeline(IngestionPipeline):
             # Initialize shared components
             
             # 1. Embedder - Use the one from config
-            embedder_config = get_component_config("embedders.sentence_transformer", self._config_path)
-            self._embedder = await self._load_embedder(embedder_config)
+            self._embedder = await self._load_embedder()
             
-            # 2. Vector Store - Use ChromaDB from config
-            vector_store_config = get_component_config("vector_stores.chroma", self._config_path)
-            self._vector_store = await self._load_vector_store(vector_store_config)
+            # Initialize vector store only if not provided in constructor
+            if self._vector_store is None:
+                self._vector_store = await self._load_vector_store()
+                self.logger.info({
+                    "action": "PIPELINE_VECTOR_STORE_CREATED",
+                    "message": "Created new vector store instance"
+                })
+            else:
+                self.logger.info({
+                    "action": "PIPELINE_VECTOR_STORE_SHARED",
+                    "message": "Using shared vector store instance from orchestrator"
+                })
             
             # 3. State Manager
             state_manager_config = get_component_config("state_manager", self._config_path)
             db_path = state_manager_config.get("db_path", "./db/sql/ingestor_state.db")
             self._state_manager = StateManager(db_path=db_path)
-            self._state_manager.initialize()
+            self._state_manager.initialize()  # Call initialize on the state manager
+            
+            self.logger.info({
+                "action": "PIPELINE_STATE_MANAGER_INIT",
+                "message": "State manager initialized",
+                "data": {"db_path": db_path}
+            })
             
             # Mark pipeline as initialized before initializing ingestors
             self._is_initialized = True
@@ -124,25 +149,16 @@ class DefaultIngestionPipeline(IngestionPipeline):
             # For telegram pipeline
             telegram_pipeline_config = get_component_config("pipelines.telegram", self._config_path)
             if telegram_pipeline_config:
-                telegram_ingestor_config = get_component_config("pipelines.telegram.ingestor.telegram", self._config_path)
-                if telegram_ingestor_config:
-                    await self._initialize_telegram_ingestor(telegram_ingestor_config)
+                await self._initialize_telegram_ingestor()
             
             # For whatsapp pipeline
             whatsapp_pipeline_config = get_component_config("pipelines.whatsapp", self._config_path)
             if whatsapp_pipeline_config:
-                whatsapp_ingestor_config = get_component_config("pipelines.whatsapp.ingestor.whatsapp", self._config_path)
-                if whatsapp_ingestor_config:
-                    await self._initialize_whatsapp_ingestor(whatsapp_ingestor_config)
+                await self._initialize_whatsapp_ingestor()
             
             self.logger.info({
-                "action": "PIPELINE_INITIALIZED",
-                "message": "Default ingestion pipeline initialized successfully",
-                "data": {
-                    "batch_size": self._batch_size,
-                    "schedule_interval_minutes": self._schedule_interval_minutes,
-                    "registered_ingestors": list(self._ingestors.keys())
-                }
+                "action": "PIPELINE_INIT_SUCCESS",
+                "message": "Ingestion pipeline initialized successfully"
             })
             
         except Exception as e:
@@ -154,7 +170,7 @@ class DefaultIngestionPipeline(IngestionPipeline):
             })
             raise IngestionPipelineError(error_message) from e
     
-    async def _initialize_telegram_ingestor(self, config: Dict[str, Any]) -> None:
+    async def _initialize_telegram_ingestor(self) -> None:
         """
         Initialize and register the Telegram ingestor and preprocessor.
         
@@ -169,8 +185,8 @@ class DefaultIngestionPipeline(IngestionPipeline):
             telegram_ingestor = TelegramIngestor()
             await telegram_ingestor.initialize()
             
-            # Create and initialize Telegram preprocessor
-            telegram_preprocessor = TelegramPreprocessor()
+            # Create and initialize Telegram preprocessor with reference to ingestor
+            telegram_preprocessor = TelegramPreprocessor(ingestor=telegram_ingestor)
             await telegram_preprocessor.initialize()
             
             # Register the Telegram ingestor with a unique ID
@@ -195,7 +211,7 @@ class DefaultIngestionPipeline(IngestionPipeline):
             })
             raise ConfigurationError(error_message) from e
     
-    async def _initialize_whatsapp_ingestor(self, config: Dict[str, Any]) -> None:
+    async def _initialize_whatsapp_ingestor(self) -> None:
         """
         Initialize and register the WhatsApp ingestor and preprocessor.
         
@@ -210,8 +226,8 @@ class DefaultIngestionPipeline(IngestionPipeline):
             whatsapp_ingestor = WhatsAppIngestor()
             await whatsapp_ingestor.initialize()
             
-            # Create and initialize WhatsApp preprocessor
-            whatsapp_preprocessor = WhatsAppPreprocessor()
+            # Create and initialize WhatsApp preprocessor with reference to ingestor
+            whatsapp_preprocessor = WhatsAppPreprocessor(ingestor=whatsapp_ingestor)
             await whatsapp_preprocessor.initialize()
             
             # Register the WhatsApp ingestor with a unique ID
@@ -236,7 +252,7 @@ class DefaultIngestionPipeline(IngestionPipeline):
             })
             raise ConfigurationError(error_message) from e
     
-    async def _load_embedder(self, config: Dict[str, Any]) -> Embedder:
+    async def _load_embedder(self) -> Embedder:
         """
         Load embedder component based on configuration.
         
@@ -265,7 +281,7 @@ class DefaultIngestionPipeline(IngestionPipeline):
             })
             raise ConfigurationError(error_message) from e
     
-    async def _load_vector_store(self, config: Dict[str, Any]) -> VectorStore:
+    async def _load_vector_store(self) -> VectorStore:
         """
         Load vector store component based on configuration.
         
@@ -518,8 +534,8 @@ class DefaultIngestionPipeline(IngestionPipeline):
                         vectors_list.append(embedding)
                     
                     # Add to vector store
-                    self._vector_store.add_documents(documents=document_list, vectors=vectors_list)
-                    
+                    await self._vector_store.add_documents(documents=document_list, vectors=vectors_list)
+
                     # Update count
                     total_documents_processed += len(batch)
                     

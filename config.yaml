@@ -66,7 +66,7 @@ orchestrator:
     memory:
       k: 5
       type: buffer
-    model: deepseek-r1:32b
+    model: deepseek-r1:8b
     provider: ollama
     type: langchain
   
@@ -82,11 +82,27 @@ orchestrator:
       collection_name: messages
       embedding_function: sentence_transformer
       persist_directory: ./db/vector/chroma_db
+      # Enhanced retrieval options
+      enable_bm25: true
+      bm25_k1: 1.5  # BM25 parameter - term saturation
+      bm25_b: 0.75  # BM25 parameter - document length normalization
+      tokenizer_pattern: '\b\w+\b'  # Word tokenizer for BM25 index
   
   prompt_builder:
     error_template: 'Unable to process: {error}'
     fallback_template: 'Answer based on general knowledge: {question}'
     template: "Context:\n{context}\n\nQuestion: {question}\n\nYour response should be conversational and helpful. Remember to continue from any previous conversation if relevant."
+    # User reference settings
+    user_reference:
+      enabled: true
+      terms:
+        - "User"    # Default username
+        - "Mihir"
+        - "Encrypted8532"
+        - "Mihirsinh Parmar"
+        - "918010198714@c.us"
+        - "Admin"   # Role identifier
+      template: "Note: In the context, the terms {terms} refer to you, the user. Messages from 'Me' are messages that you sent."
   
   # Pipeline configurations
   pipelines:
@@ -100,6 +116,7 @@ orchestrator:
           api_id: $TELEGRAM_API_ID
           phone_number: $TELEGRAM_PHONE_NUMBER
           session_string: $TELEGRAM_SESSION_STRING
+          user_info_file: "db/telegram/user_info.json"
           
           # Chat and message limits
           max_chats: 100            # Maximum number of chats to fetch (-1 for all available)
@@ -115,7 +132,7 @@ orchestrator:
         max_messages_per_chunk: 10
         time_window_minutes: 15
         store_chat_history: true
-        chat_history_dir: "db/telegram_chats"
+        chat_history_dir: "db/telegram/chats"
     
     whatsapp:
       batch_size: 100
@@ -126,10 +143,11 @@ orchestrator:
           service_url: "http://localhost:3006"
           session_id: "default_session"
           request_timeout: 30
+          user_info_file: "db/whatsapp/user_info.json"
       preprocessor:
         chunk_size: 512
         include_overlap: true
         max_messages_per_chunk: 10
         time_window_minutes: 15
         store_chat_history: true
-        chat_history_dir: "db/whatsapp_chats"
+        chat_history_dir: "db/whatsapp/chats"

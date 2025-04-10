@@ -12,6 +12,7 @@ from typing import Dict, Any, List, Optional, Tuple
 import asyncio
 import traceback
 import json
+import re
 
 from ici.core.interfaces.orchestrator import Orchestrator
 from ici.core.interfaces.validator import Validator
@@ -224,12 +225,18 @@ class DefaultOrchestrator(Orchestrator):
             self._validator = RuleBasedValidator(logger_name="orchestrator.validator")
             await self._validator.initialize()
 
+            # Initialize embedder
             self._embedder = SentenceTransformerEmbedder(logger_name="orchestrator.embedder")
             await self._embedder.initialize()
             
-            # Initialize vector store
+            # Initialize vector store first (so we can share it with the pipeline)
             self._vector_store = ChromaDBStore(logger_name="orchestrator.vector_store")
             await self._vector_store.initialize()
+            
+            self.logger.info({
+                "action": "ORCHESTRATOR_VECTOR_STORE_INIT",
+                "message": "Vector store initialized successfully"
+            })
             
             # Initialize prompt builder
             self._prompt_builder = BasicPromptBuilder(logger_name="orchestrator.prompt_builder")
@@ -256,9 +263,12 @@ class DefaultOrchestrator(Orchestrator):
                 })
                 raise e
             
-            # Initialize ingestion pipeline
+            # Initialize ingestion pipeline with the shared vector store
             print("Initializing ingestion pipeline...")
-            self._pipeline = DefaultIngestionPipeline(logger_name="orchestrator.pipeline")
+            self._pipeline = DefaultIngestionPipeline(
+                logger_name="orchestrator.pipeline",
+                vector_store=self._vector_store  # Pass the shared vector store instance
+            )
             await self._pipeline.initialize()
             
             self.logger.info({
@@ -747,7 +757,7 @@ class DefaultOrchestrator(Orchestrator):
     
     async def _search_documents(self, query: str, top_k: int) -> List[Dict[str, Any]]:
         """
-        Searches for documents relevant to the query.
+        Searches for documents relevant to the query using hybrid retrieval with query expansion.
         
         Args:
             query: The search query
@@ -760,75 +770,160 @@ class DefaultOrchestrator(Orchestrator):
             OrchestratorError: If search fails
         """
         try:
-            # Convert text query to embedding vector using the embedder
+            # Generate expanded queries for better retrieval
+            expanded_queries = await self._expand_query(query)
+            
             self.logger.info({
-                "action": "ORCHESTRATOR_EMBED_QUERY",
-                "message": "Converting query to embedding",
-                "data": {"query": query}
+                "action": "ORCHESTRATOR_EXPANDED_QUERIES",
+                "message": f"Using {len(expanded_queries)} expanded queries for search",
+                "data": {"expanded_queries": expanded_queries}
             })
             
-            # Get embedding from the embedder
-            query_vector, _ = await self._embedder.embed(query)
-
-            self.logger.info({
-                "action": "ORCHESTRATOR_EMBEDDING_SUCCESS",
-                "message": "Embedding successful",
-                "data": {"query_vector": query_vector}
-            })
+            # Results from all expanded queries
+            all_semantic_results = []
+            all_keyword_results = []
             
-            # Search for documents with the embedding vector
-            # Request more results than needed to apply similarity threshold filtering
-            search_results = self._vector_store.search(
-                query_vector=query_vector,
-                num_results=top_k * 2,  # Request more to filter by threshold
-                filters=None  # No filters for now
+            # Process each expanded query
+            for expanded_query in expanded_queries:
+                # Convert text query to embedding vector using the embedder
+                query_vector, _ = await self._embedder.embed(expanded_query)
+                
+                # Perform semantic search for this expanded query
+                semantic_results = await self._vector_store.search(
+                    query_vector=query_vector,
+                    num_results=max(5, top_k),  # Get at least 5 results per query
+                    filters=None
+                )
+                
+                # Add to combined results
+                all_semantic_results.append(semantic_results)
+                
+                # Optional: Perform keyword search if available
+                try:
+                    if hasattr(self._vector_store, "keyword_search_async"):
+                        # Use the async version that waits for indexing to complete
+                        keyword_results = await self._vector_store.keyword_search_async(
+                            query=expanded_query,
+                            num_results=max(5, top_k)
+                        )
+                        all_keyword_results.append(keyword_results)
+                    elif hasattr(self._vector_store, "keyword_search"):
+                        # Fallback to synchronous version
+                        keyword_results = self._vector_store.keyword_search(
+                            query=expanded_query,
+                            num_results=max(5, top_k)
+                        )
+                        all_keyword_results.append(keyword_results)
+                except Exception as e:
+                    self.logger.warning({
+                        "action": "ORCHESTRATOR_KEYWORD_SEARCH_ERROR",
+                        "message": f"Keyword search failed: {str(e)}",
+                        "data": {"error": str(e)}
+                    })
+            
+            # Flatten all results while retaining origin
+            flattened_semantic = []
+            for results in all_semantic_results:
+                flattened_semantic.extend(results)
+                
+            flattened_keyword = []
+            for results in all_keyword_results:
+                flattened_keyword.extend(results)
+            
+            # Combine results using reciprocal rank fusion
+            combined_results = self._reciprocal_rank_fusion(
+                [flattened_semantic, flattened_keyword], 
+                k=60  # RRF constant
             )
-
+            
+            # Apply similarity threshold filtering
+            filtered_results = []
+            for doc in combined_results:
+                # Skip documents with no score or below threshold
+                if "score" not in doc or doc["score"] is None:
+                    continue
+                    
+                if doc["score"] >= self._similarity_threshold:
+                    filtered_results.append(doc)
+                    
+                # Break if we have enough results
+                if len(filtered_results) >= top_k:
+                    break
+            
             self.logger.info({
                 "action": "ORCHESTRATOR_SEARCH_RESULTS",
                 "message": "Search results",
-                "data": {"search_results": search_results}
+                "data": {
+                    "semantic_results": len(flattened_semantic),
+                    "keyword_results": len(flattened_keyword),
+                    "combined_results": len(combined_results),
+                    "filtered_results": len(filtered_results)
+                }
             })
             
-            # Filter results by similarity threshold
-            if self._similarity_threshold > 0:
-                filtered_results = [
-                    doc for doc in search_results 
-                    if doc.get('score', 0) >= self._similarity_threshold
-                ]
-                search_results = filtered_results[:top_k]  # Limit to requested number
-            else:
-                # Just take the top_k if no threshold
-                search_results = search_results[:top_k]
-            
-            if not search_results:
-                self.logger.info({
-                    "action": "ORCHESTRATOR_NO_DOCUMENTS",
-                    "message": "No relevant documents found",
-                    "data": {"query": query, "top_k": top_k, "threshold": self._similarity_threshold}
-                })
-            else:
-                self.logger.info({
-                    "action": "ORCHESTRATOR_DOCUMENTS_FOUND",
-                    "message": f"Found {len(search_results)} relevant documents",
-                    "data": {
-                        "count": len(search_results), 
-                        "top_k": top_k,
-                        "threshold": self._similarity_threshold
-                    }
-                })
-            
-            return search_results
+            return filtered_results[:top_k]
             
         except Exception as e:
             self.logger.error({
                 "action": "ORCHESTRATOR_SEARCH_ERROR",
-                "message": f"Search failed: {str(e)}",
+                "message": f"Failed to search documents: {str(e)}",
                 "data": {"error": str(e), "error_type": type(e).__name__}
             })
+            raise OrchestratorError(f"Failed to search documents: {str(e)}") from e
+    
+    def _reciprocal_rank_fusion(self, result_lists: List[List[Dict[str, Any]]], k: int = 60) -> List[Dict[str, Any]]:
+        """
+        Combines multiple result lists using Reciprocal Rank Fusion.
+        
+        Args:
+            result_lists: List of result lists to combine
+            k: Constant for RRF calculation (prevents division by zero and controls impact)
             
-            # Return empty list on error
-            return []
+        Returns:
+            List[Dict[str, Any]]: Combined and reranked results
+        """
+        # Track document scores by ID
+        doc_scores = {}
+        doc_objects = {}
+        
+        # Process each result list
+        for results in result_lists:
+            if not results:
+                continue
+                
+            for rank, doc in enumerate(results):
+                # Get document ID or create one
+                doc_id = doc.get("id", None)
+                if doc_id is None:
+                    # Create stable ID from content if none exists
+                    text = doc.get("text", "")
+                    metadata = doc.get("metadata", {})
+                    doc_id = f"{hash(text)}_{hash(str(metadata))}"
+                
+                # Store document object for later
+                doc_objects[doc_id] = doc
+                
+                # Calculate RRF score: 1/(k + rank)
+                rrf_score = 1.0 / (k + rank)
+                
+                # Add to existing score or initialize
+                if doc_id in doc_scores:
+                    doc_scores[doc_id] += rrf_score
+                else:
+                    doc_scores[doc_id] = rrf_score
+        
+        # Sort documents by RRF score
+        sorted_doc_ids = sorted(doc_scores.keys(), key=lambda x: doc_scores[x], reverse=True)
+        
+        # Create final result list with original documents
+        combined_results = []
+        for doc_id in sorted_doc_ids:
+            doc = doc_objects[doc_id]
+            # Add RRF score to document
+            doc["rrf_score"] = doc_scores[doc_id]
+            combined_results.append(doc)
+            
+        return combined_results
     
     async def _generate_response(self, prompt: str) -> str:
         """
@@ -1108,4 +1203,93 @@ class DefaultOrchestrator(Orchestrator):
                 "data": {"error": str(e), "error_type": type(e).__name__}
             })
             
-            return health_result 
+            return health_result
+    
+    async def _expand_query(self, query: str) -> List[str]:
+        """
+        Generate multiple versions of the query to improve retrieval.
+        
+        Args:
+            query: The original query string
+            
+        Returns:
+            List[str]: A list of expanded queries
+        """
+        expanded_queries = [query]  # Always include the original query
+        
+        try:
+            # If LLM generator exists, use it for sophisticated expansions
+            if hasattr(self, '_generator') and self._generator:
+                expansion_prompt = f"""Generate three alternative versions of the following query to improve document retrieval.
+                
+Original Query: {query}
+
+Instructions:
+1. Rephrase the query in different ways while preserving the core intent
+2. Use synonyms for key terms
+3. Make one version more specific and one more general
+4. Format as a numbered list with no additional text
+
+Example:
+1. [rephrased query 1]
+2. [rephrased query 2]
+3. [rephrased query 3]
+"""
+                
+                try:
+                    result = await self._generator.generate(expansion_prompt)
+                    
+                    # Extract expanded queries from the result
+                    lines = [line.strip() for line in result.split('\n') if line.strip()]
+                    for line in lines:
+                        # Extract the query part after any numbering (e.g., "1. query" -> "query")
+                        if re.match(r'^\d+\.', line):
+                            expanded_query = re.sub(r'^\d+\.\s*', '', line)
+                            if expanded_query and expanded_query not in expanded_queries:
+                                expanded_queries.append(expanded_query)
+                    
+                    self.logger.info({
+                        "action": "ORCHESTRATOR_QUERY_EXPANSION",
+                        "message": "Generated expanded queries using LLM",
+                        "data": {"original": query, "expanded": expanded_queries}
+                    })
+                    
+                except Exception as e:
+                    self.logger.warning({
+                        "action": "ORCHESTRATOR_QUERY_EXPANSION_ERROR",
+                        "message": f"Failed to expand query with LLM: {str(e)}",
+                        "data": {"error": str(e)}
+                    })
+            
+            # Basic query expansion methods (if LLM expansion failed or wasn't available)
+            if len(expanded_queries) <= 1:
+                # Remove question words
+                question_words = ["what", "who", "where", "when", "why", "how", "is", "are", "can", "could", "would", "should"]
+                
+                # Simple rephrasing by removing question words
+                for word in question_words:
+                    pattern = rf'\b{word}\b\s+'
+                    simplified = re.sub(pattern, '', query, flags=re.IGNORECASE)
+                    if simplified != query and simplified not in expanded_queries:
+                        expanded_queries.append(simplified)
+                
+                # Add some context-related terms
+                expanded_queries.append(f"information about {query}")
+                
+                self.logger.info({
+                    "action": "ORCHESTRATOR_QUERY_EXPANSION",
+                    "message": "Generated expanded queries using rules",
+                    "data": {"original": query, "expanded": expanded_queries}
+                })
+        
+        except Exception as e:
+            self.logger.warning({
+                "action": "ORCHESTRATOR_QUERY_EXPANSION_ERROR",
+                "message": f"Error in query expansion: {str(e)}",
+                "data": {"error": str(e)}
+            })
+            # Ensure we at least return the original query
+            if not expanded_queries:
+                expanded_queries = [query]
+        
+        return expanded_queries 
