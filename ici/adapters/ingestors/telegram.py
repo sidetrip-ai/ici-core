@@ -51,6 +51,10 @@ class TelegramIngestor(Ingestor):
         self._request_delay = 0.5  # Default delay between requests in seconds
         self._config_path = os.environ.get("ICI_CONFIG_PATH", "config.yaml")
         self._session_string = None  # Cache the session string for reuse
+        
+        # User info properties
+        self._user_info = None
+        self._user_info_file = os.path.join("db", "telegram", "user_info.json")
     
     async def initialize(self) -> None:
         """
@@ -137,6 +141,20 @@ class TelegramIngestor(Ingestor):
             if "session_string" in telegram_config:
                 self._session_string = telegram_config["session_string"]
             
+            # Load cached user info
+            await self._load_user_info()
+            
+            # Try to get user info if we have a session string
+            if self._session_string and self._session_string != "your_telegram_session_string":
+                try:
+                    await self.get_user_info()
+                except Exception as e:
+                    self.logger.warning({
+                        "action": "USER_INFO_RETRIEVAL_WARNING",
+                        "message": f"Could not get user info during initialization: {str(e)}",
+                        "data": {"error": str(e)}
+                    })
+            
             self.logger.info({
                 "action": "INGESTOR_INITIALIZED",
                 "message": "Telegram ingestor initialized successfully",
@@ -145,7 +163,8 @@ class TelegramIngestor(Ingestor):
                     "max_messages_per_chat": self._max_messages_per_chat, 
                     "batch_size": self._batch_size,
                     "request_delay": self._request_delay,
-                    "ignored_chats_count": len(self._ignored_chats)
+                    "ignored_chats_count": len(self._ignored_chats),
+                    "user_id": self.get_current_user_id()
                 }
             })
             
@@ -303,32 +322,28 @@ class TelegramIngestor(Ingestor):
     
     async def healthcheck(self) -> Dict[str, Any]:
         """
-        Check if the ingestor is properly configured and can connect to Telegram.
+        Perform a health check of the Telegram ingestor.
         
         Returns:
-            Dict[str, Any]: Dictionary containing health status information.
+            Dict[str, Any]: Health status information
         """
         try:
-            self.logger.info({
-                "action": "HEALTHCHECK_START",
-                "message": "Performing Telegram ingestor health check"
-            })
-            
-            user_result = await self._test_connection()
+            # Test the connection
+            test_result = await self._test_connection()
             
             health_status = {
                 "healthy": True,
-                "message": f"Connected to Telegram as {user_result.get('first_name', '')} {user_result.get('last_name', '')}",
+                "message": f"Connected to Telegram as {test_result.get('first_name', '')} {test_result.get('last_name', '')}",
                 "details": {
-                    "user_id": user_result.get("id"),
-                    "username": user_result.get("username"),
+                    "user_id": test_result.get("user_id"),
+                    "username": test_result.get("username"),
                     "api_id": self._config.get("api_id") if self._config else None
                 }
             }
             
             self.logger.info({
-                "action": "HEALTHCHECK_SUCCESS",
-                "message": "Telegram ingestor health check passed",
+                "action": "HEALTHCHECK_COMPLETE",
+                "message": "Telegram ingestor health check completed successfully",
                 "data": health_status
             })
             
@@ -353,6 +368,102 @@ class TelegramIngestor(Ingestor):
             })
             
             return health_status
+    
+    # User information methods
+    
+    async def get_user_info(self) -> Dict[str, Any]:
+        """
+        Get information about the current authenticated Telegram user.
+        
+        Returns:
+            Dict[str, Any]: Dictionary containing user information such as user_id, username, etc.
+            
+        Raises:
+            DataFetchError: If retrieval fails
+        """
+        try:
+            # Return cached info if available
+            if self._user_info:
+                return self._user_info
+            
+            # Fetch from Telegram API
+            user_info = await self._test_connection()
+            
+            # Cache the info
+            if user_info and "user_id" in user_info:
+                self._user_info = user_info
+                await self._save_user_info()
+                
+                self.logger.info({
+                    "action": "USER_INFO_RETRIEVED",
+                    "message": "Telegram user info retrieved and cached",
+                    "data": {"user_id": user_info["user_id"]}
+                })
+            
+            return user_info
+        
+        except Exception as e:
+            self.logger.error({
+                "action": "GET_USER_INFO_ERROR",
+                "message": f"Error fetching user info: {str(e)}",
+                "data": {"error": str(e)}
+            })
+            raise DataFetchError(f"Failed to fetch Telegram user info: {str(e)}") from e
+    
+    async def _save_user_info(self) -> None:
+        """Save user info to persistent storage."""
+        if not self._user_info:
+            return
+            
+        try:
+            # Ensure directory exists
+            os.makedirs(os.path.dirname(self._user_info_file), exist_ok=True)
+            
+            # Save to file
+            with open(self._user_info_file, "w") as f:
+                json.dump(self._user_info, f, indent=2)
+                
+            self.logger.debug({
+                "action": "USER_INFO_SAVED",
+                "message": "Telegram user info saved to disk",
+                "data": {"file": self._user_info_file}
+            })
+        except Exception as e:
+            self.logger.warning({
+                "action": "USER_INFO_SAVE_ERROR",
+                "message": f"Failed to save user info: {str(e)}",
+                "data": {"error": str(e)}
+            })
+    
+    async def _load_user_info(self) -> None:
+        """Load user info from persistent storage."""
+        try:
+            if os.path.exists(self._user_info_file):
+                with open(self._user_info_file, "r") as f:
+                    self._user_info = json.load(f)
+                    
+                self.logger.debug({
+                    "action": "USER_INFO_LOADED",
+                    "message": "Telegram user info loaded from disk",
+                    "data": {"user_id": self._user_info.get("user_id")}
+                })
+        except Exception as e:
+            self.logger.warning({
+                "action": "USER_INFO_LOAD_ERROR",
+                "message": f"Failed to load user info: {str(e)}",
+                "data": {"error": str(e)}
+            })
+    
+    def get_current_user_id(self) -> Optional[str]:
+        """
+        Get the current Telegram user ID if available.
+        
+        Returns:
+            Optional[str]: The user ID or None if not available
+        """
+        if self._user_info and "user_id" in self._user_info:
+            return str(self._user_info["user_id"])
+        return None
     
     async def _create_client(self) -> TelegramClient:
         """
@@ -773,6 +884,7 @@ class TelegramIngestor(Ingestor):
                     "date": msg.date.isoformat(),
                     "timestamp": int(msg.date.timestamp()),
                     "sender_id": sender_id,
+                    "from_id": sender_id,  # Add from_id field to match the sender_id for preprocessor compatibility
                     "sender_name": sender_name,
                     "is_outgoing": msg.out if hasattr(msg, 'out') else False,
                     "reply_to_id": msg.reply_to.reply_to_msg_id if msg.reply_to else None,
@@ -783,6 +895,19 @@ class TelegramIngestor(Ingestor):
                 
                 messages.append(message_obj)
                 message_lookup[msg.id] = message_obj
+            
+            # Log message fields for debugging
+            if messages and len(messages) > 0:
+                first_msg = messages[0]
+                self.logger.debug({
+                    "action": "TELEGRAM_MESSAGE_FIELDS",
+                    "message": "Telegram message fields available after processing",
+                    "data": {
+                        "has_sender_id": "sender_id" in first_msg,
+                        "has_from_id": "from_id" in first_msg,
+                        "sample_keys": list(first_msg.keys())[:10]  # Show first 10 keys to avoid huge log
+                    }
+                })
             
             # Second pass - establish relationships between messages
             for message in messages:

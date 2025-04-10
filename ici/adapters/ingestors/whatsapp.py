@@ -5,6 +5,8 @@ WhatsApp ingestor implementation using WhatsApp Web JS via a Node.js service.
 import asyncio
 import os
 import time
+import json
+import sys
 from datetime import datetime, timezone, timedelta
 from typing import Any, Dict, List, Optional, cast
 
@@ -41,6 +43,10 @@ class WhatsAppIngestor(Ingestor):
         self._session = None
         self._is_initialized = False
         self._auth_status = "DISCONNECTED"
+        
+        # Add user info properties
+        self._user_info = None
+        self._user_info_file = None
     
     async def initialize(self) -> None:
         """
@@ -74,6 +80,7 @@ class WhatsAppIngestor(Ingestor):
             # Store the configuration
             self._config = whatsapp_config
             self._service_url = whatsapp_config["service_url"]
+            self._user_info_file = whatsapp_config.get("user_info_file", os.path.join("db", "whatsapp", "user_info.json"))
             
             # Set session ID if provided, otherwise use a default
             self._session_id = whatsapp_config.get("session_id", "default_session")
@@ -93,13 +100,28 @@ class WhatsAppIngestor(Ingestor):
             # Check the service status
             await self._update_auth_status()
             
+            # Load cached user info
+            await self._load_user_info()
+            
+            # If authenticated, try to get user info
+            if self._auth_status == "CONNECTED":
+                try:
+                    await self.get_user_info()
+                except Exception as e:
+                    self.logger.warning({
+                        "action": "USER_INFO_RETRIEVAL_WARNING",
+                        "message": f"Authenticated but couldn't get user info during initialization: {str(e)}",
+                        "data": {"error": str(e)}
+                    })
+            
             self.logger.info({
                 "action": "INGESTOR_INITIALIZED",
                 "message": "WhatsApp ingestor initialized successfully",
                 "data": {
                     "service_url": self._service_url,
                     "session_id": self._session_id,
-                    "auth_status": self._auth_status
+                    "auth_status": self._auth_status,
+                    "user_id": self.get_current_user_id()
                 }
             })
             
@@ -584,7 +606,38 @@ class WhatsAppIngestor(Ingestor):
                         raise DataFetchError(f"Failed to fetch messages for chat {chat_id}: {error_text}")
                     
                     data = await response.json()
-                    return data.get("messages", [])
+                    messages = data.get("messages", [])
+                    
+                    # Transform messages to ensure they have sender_id field
+                    for message in messages:
+                        # Map author or from to sender_id for consistent identification
+                        if "author" in message:
+                            message["sender_id"] = message["author"]
+                        elif "from" in message:
+                            message["sender_id"] = message["from"]
+                    
+                    self.logger.debug({
+                        "action": "MESSAGES_TRANSFORMED",
+                        "message": f"Added sender_id to {len(messages)} messages",
+                        "data": {"chat_id": chat_id, "message_count": len(messages)}
+                    })
+                    
+                    # Log the structure of the first message for debugging if available
+                    if messages and len(messages) > 0:
+                        # Get the first message keys for debugging
+                        first_msg = messages[0]
+                        self.logger.debug({
+                            "action": "MESSAGE_STRUCTURE",
+                            "message": "Sample message structure after transformation",
+                            "data": {
+                                "has_sender_id": "sender_id" in first_msg,
+                                "has_author": "author" in first_msg,
+                                "has_from": "from" in first_msg,
+                                "keys": list(first_msg.keys())
+                            }
+                        })
+                    
+                    return messages
                     
             except aiohttp.ClientError as e:
                 self.logger.error({
@@ -718,6 +771,22 @@ class WhatsAppIngestor(Ingestor):
                         "action": "AUTHENTICATION_SUCCESS",
                         "message": "WhatsApp authentication successful"
                     })
+                    
+                    # Get user info after successful authentication
+                    try:
+                        user_info = await self.get_user_info()
+                        self.logger.error({
+                            "action": "USER_INFO_AFTER_AUTH",
+                            "message": "User information retrieved after authentication",
+                            "data": {"user_id": user_info.get("id")}
+                        })
+                    except Exception as e:
+                        self.logger.warning({
+                            "action": "USER_INFO_AFTER_AUTH_ERROR",
+                            "message": f"Error getting user info after authentication: {str(e)}",
+                            "data": {"error": str(e)}
+                        })
+                    
                     return True
                 
                 # If authentication failed, raise an error
@@ -807,4 +876,122 @@ class WhatsAppIngestor(Ingestor):
             health_info["error"] = str(e)
             health_info["error_type"] = type(e).__name__
         
-        return health_info 
+        return health_info
+
+    # User information methods
+    
+    async def get_user_info(self) -> Dict[str, Any]:
+        """
+        Get information about the current authenticated WhatsApp user.
+        
+        Returns:
+            Dict[str, Any]: Dictionary containing user information such as user_id, name, etc.
+            
+        Raises:
+            DataFetchError: If retrieval fails
+            AuthenticationError: If not authenticated
+        """
+        if not self._is_initialized:
+            raise ConfigurationError("Ingestor not initialized. Call initialize() first.")
+        
+        if not await self.is_authenticated():
+            raise AuthenticationError("Not authenticated with WhatsApp")
+        
+        try:
+            # Return cached info if available and connected
+            if self._user_info and self._auth_status == "CONNECTED":
+                return self._user_info
+            
+            # Fetch from service
+            async with aiohttp.ClientSession() as session:
+                async with session.get(
+                    f"{self._service_url}/api/user-info",
+                    timeout=self._request_timeout
+                ) as response:
+                    if response.status != 200:
+                        error_text = await response.text()
+                        raise DataFetchError(f"Failed to fetch user info: {error_text}")
+                    
+                    data = await response.json()
+                    user_info = data.get("user", {})
+                    
+                    # Cache the info
+                    if user_info and "id" in user_info:
+                        self._user_info = user_info
+                        await self._save_user_info()
+                        
+                        self.logger.info({
+                            "action": "USER_INFO_RETRIEVED",
+                            "message": "WhatsApp user info retrieved and cached",
+                            "data": {"user_id": user_info["id"]}
+                        })
+
+                    # print("--------------------------------")
+                    # print("user_info")
+                    # print(user_info)
+                    # print("--------------------------------")
+
+                    return user_info
+        
+        except aiohttp.ClientError as e:
+            self.logger.error({
+                "action": "GET_USER_INFO_ERROR",
+                "message": f"Error fetching user info: {str(e)}",
+                "data": {"error": str(e)}
+            })
+            raise DataFetchError(f"Failed to fetch WhatsApp user info: {str(e)}") from e
+    
+    async def _save_user_info(self) -> None:
+        """Save user info to persistent storage."""
+        if not self._user_info:
+            return
+            
+        try:
+            # Ensure directory exists
+            os.makedirs(os.path.dirname(self._user_info_file), exist_ok=True)
+            
+            # Save to file
+            with open(self._user_info_file, "w") as f:
+                json.dump(self._user_info, f, indent=2)
+                
+            self.logger.debug({
+                "action": "USER_INFO_SAVED",
+                "message": "WhatsApp user info saved to disk",
+                "data": {"file": self._user_info_file}
+            })
+        except Exception as e:
+            self.logger.warning({
+                "action": "USER_INFO_SAVE_ERROR",
+                "message": f"Failed to save user info: {str(e)}",
+                "data": {"error": str(e)}
+            })
+    
+    async def _load_user_info(self) -> None:
+        """Load user info from persistent storage."""
+        try:
+            if os.path.exists(self._user_info_file):
+                with open(self._user_info_file, "r") as f:
+                    self._user_info = json.load(f)
+                    
+                self.logger.debug({
+                    "action": "USER_INFO_LOADED",
+                    "message": "WhatsApp user info loaded from disk",
+                    "data": {"user_id": self._user_info.get("id")}
+                })
+        except Exception as e:
+            self.logger.warning({
+                "action": "USER_INFO_LOAD_ERROR",
+                "message": f"Failed to load user info: {str(e)}",
+                "data": {"error": str(e)}
+            })
+    
+    def get_current_user_id(self) -> Optional[str]:
+        """
+        Get the current WhatsApp user ID if available.
+        
+        Returns:
+            Optional[str]: The user ID or None if not available
+        """
+        if self._user_info and "id" in self._user_info:
+            return self._user_info["id"]
+        return None 
