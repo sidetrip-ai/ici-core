@@ -1,10 +1,7 @@
 """
-Pipeline adapter implementations for the ICI framework.
-
-This module contains implementations of the IngestionPipeline interface,
-which orchestrate the data flow between various components.
+Pipeline implementation for ingesting data from various sources.
 """
 
-from ici.adapters.pipelines.telegram import TelegramIngestionPipeline 
+from ici.adapters.pipelines.default import DefaultIngestionPipeline
 
-__all__ = ["TelegramIngestionPipeline"]
+__all__ = ["DefaultIngestionPipeline"]
