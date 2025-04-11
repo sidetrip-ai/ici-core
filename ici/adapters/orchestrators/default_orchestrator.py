@@ -770,6 +770,22 @@ class DefaultOrchestrator(Orchestrator):
             OrchestratorError: If search fails
         """
         try:
+            # Check for source specification in the query (e.g. "from:telegram" or "source:whatsapp")
+            source_match = re.search(r'(?:from|source):(\w+)', query, re.IGNORECASE)
+            source = None
+            
+            if source_match:
+                # Extract the source name
+                source = source_match.group(1).lower()
+                # Remove the source specification from the query
+                query = re.sub(r'(?:from|source):\w+\s*', '', query).strip()
+                
+                self.logger.info({
+                    "action": "ORCHESTRATOR_SOURCE_SPECIFIED",
+                    "message": f"Source specified in query: {source}",
+                    "data": {"source": source, "cleaned_query": query}
+                })
+            
             # Generate expanded queries for better retrieval
             expanded_queries = await self._expand_query(query)
             
@@ -788,11 +804,22 @@ class DefaultOrchestrator(Orchestrator):
                 # Convert text query to embedding vector using the embedder
                 query_vector, _ = await self._embedder.embed(expanded_query)
                 
+                # Get collection name if source is specified
+                collection_name = None
+                if source:
+                    collection_name = self._vector_store.find_collection_name(source)
+                    self.logger.info({
+                        "action": "ORCHESTRATOR_COLLECTION_FOR_SOURCE",
+                        "message": f"Using collection '{collection_name}' for source '{source}'",
+                        "data": {"source": source, "collection_name": collection_name}
+                    })
+                
                 # Perform semantic search for this expanded query
                 semantic_results = await self._vector_store.search(
                     query_vector=query_vector,
                     num_results=max(5, top_k),  # Get at least 5 results per query
-                    filters=None
+                    filters=None,
+                    collection_name=collection_name
                 )
                 
                 # Add to combined results
@@ -857,7 +884,9 @@ class DefaultOrchestrator(Orchestrator):
                     "semantic_results": len(flattened_semantic),
                     "keyword_results": len(flattened_keyword),
                     "combined_results": len(combined_results),
-                    "filtered_results": len(filtered_results)
+                    "filtered_results": len(filtered_results),
+                    "source_specified": source is not None,
+                    "source": source
                 }
             })
             

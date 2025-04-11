@@ -109,6 +109,9 @@ orchestrator:
     telegram:
       schedule:
         interval_minutes: 1
+      # Vector store configuration for Telegram
+      vector_store:
+        collection_name: telegram_messages
       ingestor:
         telegram:
           # Telegram API credentials
@@ -138,6 +141,9 @@ orchestrator:
       batch_size: 100
       schedule:
         interval_minutes: 5
+      # Vector store configuration for WhatsApp
+      vector_store:
+        collection_name: whatsapp_messages
       ingestor:
         whatsapp:
           service_url: "http://localhost:3006"

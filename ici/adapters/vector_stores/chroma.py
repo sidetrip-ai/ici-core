@@ -10,6 +10,7 @@ import uuid
 import re
 import math
 import asyncio
+import time
 from typing import List, Dict, Any, Optional, Set, Tuple
 
 import chromadb
@@ -59,6 +60,9 @@ class ChromaDBStore(VectorStore):
         # BM25 parameters
         self._k1 = 1.5
         self._b = 0.75
+        
+        # Source to collection name mapping
+        self._source_collection_map = {}
     
     async def initialize(self) -> None:
         """
@@ -103,6 +107,40 @@ class ChromaDBStore(VectorStore):
                         }
                     })
                 
+                # Load pipeline configurations to get collection mappings
+                try:
+                    # Load full config to access pipeline configurations
+                    full_config = load_config(self._config_path)
+                    
+                    # Initialize source to collection mapping
+                    if "pipelines" in full_config:
+                        pipelines_config = full_config["pipelines"]
+                        
+                        # Process each pipeline configuration
+                        for source, pipeline_config in pipelines_config.items():
+                            if isinstance(pipeline_config, dict) and "vector_store" in pipeline_config:
+                                vs_config = pipeline_config["vector_store"]
+                                if "collection_name" in vs_config:
+                                    self._source_collection_map[source] = vs_config["collection_name"]
+                                    self.logger.info({
+                                        "action": "VECTOR_STORE_COLLECTION_MAPPING",
+                                        "message": f"Mapped source '{source}' to collection '{vs_config['collection_name']}'",
+                                        "data": {"source": source, "collection": vs_config["collection_name"]}
+                                    })
+                    
+                    self.logger.info({
+                        "action": "VECTOR_STORE_COLLECTION_MAPPINGS_LOADED",
+                        "message": f"Loaded {len(self._source_collection_map)} source-to-collection mappings",
+                        "data": {"mappings": self._source_collection_map}
+                    })
+                    
+                except Exception as e:
+                    self.logger.warning({
+                        "action": "VECTOR_STORE_COLLECTION_MAPPINGS_WARNING",
+                        "message": f"Failed to load collection mappings: {str(e)}. Using defaults.",
+                        "data": {"error": str(e)}
+                    })
+                
             except Exception as e:
                 # Use defaults if configuration loading fails
                 self.logger.warning({
@@ -138,6 +176,21 @@ class ChromaDBStore(VectorStore):
                     "message": f"Created new collection '{self._collection_name}'"
                 })
             
+            # Initialize all mapped collections
+            for source, collection_name in self._source_collection_map.items():
+                try:
+                    self._client.get_collection(name=collection_name)
+                    self.logger.info({
+                        "action": "VECTOR_STORE_MAPPED_COLLECTION_EXISTS",
+                        "message": f"Mapped collection '{collection_name}' for source '{source}' exists"
+                    })
+                except Exception:
+                    self._client.create_collection(name=collection_name)
+                    self.logger.info({
+                        "action": "VECTOR_STORE_MAPPED_COLLECTION_CREATED",
+                        "message": f"Created mapped collection '{collection_name}' for source '{source}'"
+                    })
+            
             self._is_initialized = True
             
             self.logger.info({
@@ -153,109 +206,135 @@ class ChromaDBStore(VectorStore):
             })
             raise VectorStoreError(f"Vector store initialization failed: {str(e)}") from e
             
-    async def add_documents(
-        self, 
-        documents: List[Dict[str, Any]], 
-        vectors: List[List[float]]
-    ) -> List[str]:
+    async def _store_documents_internal(
+        self,
+        documents: List[Dict[str, Any]],
+        vectors: Optional[List[List[float]]] = None,
+        collection_name: Optional[str] = None,
+        return_ids: bool = False
+    ) -> Optional[List[str]]:
         """
-        Stores documents along with their vector embeddings.
-
+        Internal method for storing documents in the vector store.
+        
         Args:
             documents: List of documents to store
-            vectors: List of vector embeddings for the documents
-            collection_name: Optional collection name (uses default if None)
-
+            vectors: Optional list of vector embeddings (if None, vectors must be in documents)
+            collection_name: Optional name of collection to store in
+            return_ids: Whether to return document IDs
+            
         Returns:
-            List[str]: List of document IDs
-
+            List of document IDs if return_ids is True, otherwise None
+            
         Raises:
-            VectorStoreError: If document storage fails
+            VectorStoreError: If storage fails
         """
         if not self._is_initialized:
             self.logger.error({
                 "action": "VECTOR_STORE_NOT_INITIALIZED",
-                "message": "Vector store not initialized before adding documents"
+                "message": "Vector store not initialized before storing documents"
             })
             raise VectorStoreError("Vector store not initialized. Call initialize() first.")
         
-        if not documents or not vectors:
+        if not documents:
             self.logger.warning({
                 "action": "VECTOR_STORE_EMPTY_INPUT",
-                "message": "No documents or vectors provided to add_documents",
-                "data": {"documents_count": len(documents), "vectors_count": len(vectors)}
+                "message": "No documents provided to store"
             })
-            print("--------------------------------")
-            print("No Documents or Vectors found")
-            print("--------------------------------")
-            return []
-            
-        if len(documents) != len(vectors):
-            self.logger.error({
-                "action": "VECTOR_STORE_MISMATCH",
-                "message": "Document and vector counts don't match",
-                "data": {"documents_count": len(documents), "vectors_count": len(vectors)}
-            })
-            raise VectorStoreError(
-                f"Number of documents ({len(documents)}) must match number of vectors ({len(vectors)})"
-            )
+            return [] if return_ids else None
         
         try:
-            self.logger.info({
-                "action": "VECTOR_STORE_ADD_DOCUMENTS_START",
-                "message": "Starting to add documents to vector store",
-                "data": {"document_count": len(documents), "collection_name": self._collection_name}
-            })
-            
-            # Use the specified collection or default
-            collection = self._collection
-            try:
-                self.logger.info({
-                    "action": "VECTOR_STORE_GET_COLLECTION",
-                    "message": f"Attempting to get collection '{self._collection_name}'"
-                })
-                collection = self._client.get_collection(name=self._collection_name)
-                self.logger.info({
-                    "action": "VECTOR_STORE_COLLECTION_FOUND",
-                    "message": f"Found existing collection '{self._collection_name}'"
-                })
-            except:
-                self.logger.info({
-                    "action": "VECTOR_STORE_CREATE_COLLECTION",
-                    "message": f"Creating new collection '{self._collection_name}'"
-                })
-                collection = self._client.create_collection(name=self._collection_name)
-                self.logger.info({
-                    "action": "VECTOR_STORE_COLLECTION_CREATED",
-                    "message": f"Created new collection '{self._collection_name}'"
-                })
+            # Use provided collection name or default
+            target_collection_name = collection_name or self._collection_name
             
             # Prepare data for ChromaDB
-            self.logger.info({
-                "action": "VECTOR_STORE_PREPARE_DATA",
-                "message": "Preparing document data for ChromaDB"
-            })
-            ids = [str(uuid.uuid4()) for _ in range(len(documents))]
+            ids = []
             metadatas = []
             documents_text = []
+            embeddings = []
             
-            for doc in documents:
-                # Extract text and metadata
-                if "text" in doc:
-                    documents_text.append(doc["text"])
-                elif "content" in doc:
-                    documents_text.append(doc["content"])
-                else:
-                    documents_text.append("")
+            # Process documents based on input format
+            if vectors is not None:
+                # Handle separate documents and vectors (add_documents format)
+                if len(documents) != len(vectors):
+                    self.logger.error({
+                        "action": "VECTOR_STORE_MISMATCH",
+                        "message": "Document and vector counts don't match",
+                        "data": {"documents_count": len(documents), "vectors_count": len(vectors)}
+                    })
+                    raise VectorStoreError(
+                        f"Number of documents ({len(documents)}) must match number of vectors ({len(vectors)})"
+                    )
                 
-                # Extract metadata
-                metadata = doc.get("metadata", {})
-                metadatas.append(metadata)
+                embeddings = vectors
                 
-                # Add to BM25 index if enabled
-                if self._enable_bm25:
+                for doc in documents:
+                    # Generate ID if not provided
                     doc_id = doc.get("id", str(uuid.uuid4()))
-                    self._doc_id_map[doc_id] = ids[len(metadatas) - 1]
+                    ids.append(doc_id)
+                    
+                    # Extract text
+                    if "text" in doc:
+                        documents_text.append(doc["text"])
+                    elif "content" in doc:
+                        documents_text.append(doc["content"])
+                    else:
+                        documents_text.append("")
+                    
+                    # Extract metadata
+                    metadata = doc.get("metadata", {})
+                    metadatas.append(metadata)
+            else:
+                # Handle documents with embedded vectors (store_documents format)
+                for doc in documents:
+                    if "vector" not in doc:
+                        self.logger.error({
+                            "action": "VECTOR_STORE_MISSING_VECTOR",
+                            "message": "Document missing vector field"
+                        })
+                        raise VectorStoreError("Document missing vector field")
+                    
+                    embeddings.append(doc["vector"])
+                    
+                    # Generate ID if not provided
+                    doc_id = doc.get("id", str(uuid.uuid4()))
+                    ids.append(doc_id)
+                    
+                    # Extract text
+                    if "text" in doc:
+                        documents_text.append(doc["text"])
+                    elif "content" in doc:
+                        documents_text.append(doc["content"])
+                    else:
+                        documents_text.append("")
+                    
+                    # Extract metadata
+                    metadata = doc.get("metadata", {})
+                    metadatas.append(metadata)
+            
+            self.logger.info({
+                "action": "VECTOR_STORE_PREPARE_DATA",
+                "message": "Preparing document data for ChromaDB",
+                "data": {"document_count": len(documents), "collection_name": target_collection_name}
+            })
+            
+            # Get or create the specified collection
+            try:
+                collection = self._client.get_collection(name=target_collection_name)
+                self.logger.info({
+                    "action": "VECTOR_STORE_COLLECTION_FOUND",
+                    "message": f"Found existing collection '{target_collection_name}'"
+                })
+            except:
+                collection = self._client.create_collection(name=target_collection_name)
+                self.logger.info({
+                    "action": "VECTOR_STORE_COLLECTION_CREATED",
+                    "message": f"Created new collection '{target_collection_name}'"
+                })
+            
+            # Add to BM25 index if enabled and this is the default collection
+            if self._enable_bm25 and target_collection_name == self._collection_name:
+                for i, doc_id in enumerate(ids):
+                    self._doc_id_map[doc_id] = ids[i]
             
             # Store documents in ChromaDB
             self.logger.info({
@@ -265,7 +344,7 @@ class ChromaDBStore(VectorStore):
             })
             collection.add(
                 ids=ids,
-                embeddings=vectors,
+                embeddings=embeddings,
                 metadatas=metadatas,
                 documents=documents_text
             )
@@ -276,33 +355,90 @@ class ChromaDBStore(VectorStore):
                 "data": {"collection_name": collection.name, "count": len(documents)}
             })
             
-            # Update BM25 index if enabled
-            if self._enable_bm25:
-                self.logger.info({
-                    "action": "VECTOR_STORE_UPDATE_BM25",
-                    "message": "Updating BM25 index with new documents"
-                })
+            # Update BM25 index if enabled and this is the default collection
+            if self._enable_bm25 and target_collection_name == self._collection_name:
                 await self._update_bm25_index(ids, documents_text)
-                self.logger.info({
-                    "action": "VECTOR_STORE_BM25_UPDATED",
-                    "message": "BM25 index updated successfully"
-                })
             
-            return ids
+            return ids if return_ids else None
             
         except Exception as e:
             self.logger.error({
-                "action": "VECTOR_STORE_ADD_ERROR",
-                "message": f"Failed to add documents: {str(e)}",
+                "action": "VECTOR_STORE_DOCUMENT_STORAGE_ERROR",
+                "message": f"Failed to store documents: {str(e)}",
                 "data": {"error": str(e), "error_type": type(e).__name__}
             })
-            raise VectorStoreError(f"Failed to add documents: {str(e)}") from e
+            raise VectorStoreError(f"Failed to store documents: {str(e)}") from e
+            
+    async def add_documents(
+        self, 
+        documents: List[Dict[str, Any]], 
+        vectors: List[List[float]],
+        collection_name: Optional[str] = None
+    ) -> List[str]:
+        """
+        Stores documents along with their vector embeddings.
+
+        Args:
+            documents: List of documents to store
+            vectors: List of vector embeddings for the documents
+            collection_name: Optional name of the collection to store documents in.
+                             If None, the default collection will be used.
+
+        Returns:
+            List[str]: List of document IDs
+
+        Raises:
+            VectorStoreError: If document storage fails
+        """
+        if not documents or not vectors:
+            self.logger.warning({
+                "action": "VECTOR_STORE_EMPTY_INPUT",
+                "message": "No documents or vectors provided to add_documents",
+                "data": {"documents_count": len(documents) if documents else 0, "vectors_count": len(vectors) if vectors else 0}
+            })
+            return []
+            
+        # Use the internal method with return_ids=True
+        return await self._store_documents_internal(
+            documents=documents,
+            vectors=vectors,
+            collection_name=collection_name,
+            return_ids=True
+        ) or []
+            
+    async def store_documents(self, documents: List[Dict[str, Any]], collection_name: Optional[str] = None) -> None:
+        """
+        Store documents with their vectors, text, and metadata.
+        
+        Args:
+            documents: List of documents to store
+            collection_name: Optional name of the collection to store documents in.
+                             If None, the default collection will be used.
+            
+        Raises:
+            VectorStoreError: If storage fails
+        """
+        if not documents:
+            self.logger.warning({
+                "action": "VECTOR_STORE_EMPTY_INPUT",
+                "message": "No documents provided to store_documents"
+            })
+            return
+        
+        # Use the internal method with return_ids=False
+        await self._store_documents_internal(
+            documents=documents,
+            vectors=None,  # Vectors are in the documents
+            collection_name=collection_name,
+            return_ids=False
+        )
     
     async def search(
         self,
         query_vector: List[float],
         num_results: int = 5,
         filters: Optional[Dict[str, Any]] = None,
+        collection_name: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """
         Retrieve the most similar documents based on the query vector.
@@ -311,6 +447,8 @@ class ChromaDBStore(VectorStore):
             query_vector: Vector embedding of the query
             num_results: Maximum number of results to return
             filters: Optional metadata filters
+            collection_name: Optional name of the collection to search in.
+                             If None, the default collection will be used.
             
         Returns:
             List of documents with similarity scores
@@ -322,8 +460,26 @@ class ChromaDBStore(VectorStore):
             raise VectorStoreError("Vector store not initialized. Call initialize() first.")
         
         try:
+            # Use provided collection name or default
+            target_collection_name = collection_name or self._collection_name
+            
+            # Get the specified collection
+            try:
+                collection = self._client.get_collection(name=target_collection_name)
+                self.logger.info({
+                    "action": "VECTOR_STORE_COLLECTION_FOUND",
+                    "message": f"Found collection '{target_collection_name}' for search"
+                })
+            except Exception as e:
+                self.logger.warning({
+                    "action": "VECTOR_STORE_COLLECTION_NOT_FOUND",
+                    "message": f"Collection '{target_collection_name}' not found for search",
+                    "data": {"error": str(e)}
+                })
+                return []
+            
             # Query the collection using the query vector
-            results = self._collection.query(
+            results = collection.query(
                 query_embeddings=[query_vector],
                 n_results=num_results,
                 where=filters
@@ -344,7 +500,11 @@ class ChromaDBStore(VectorStore):
             self.logger.info({
                 "action": "VECTOR_STORE_SEARCH",
                 "message": f"Search returned {len(formatted_results)} results",
-                "data": {"query_results": len(formatted_results), "num_requested": num_results}
+                "data": {
+                    "query_results": len(formatted_results), 
+                    "num_requested": num_results,
+                    "collection_name": target_collection_name
+                }
             })
             
             return formatted_results
@@ -362,6 +522,7 @@ class ChromaDBStore(VectorStore):
         query: str,
         num_results: int = 5,
         filters: Optional[Dict[str, Any]] = None,
+        collection_name: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """
         Perform keyword-based search using BM25 algorithm.
@@ -370,6 +531,8 @@ class ChromaDBStore(VectorStore):
             query: The keyword query string
             num_results: Maximum number of results to return
             filters: Optional metadata filters
+            collection_name: Optional name of the collection to search in.
+                             If None, the default collection will be used.
             
         Returns:
             List of documents with BM25 scores
@@ -390,6 +553,15 @@ class ChromaDBStore(VectorStore):
                 }
             })
             return []
+            
+        # Note: Currently BM25 search only works with the default collection
+        # If a different collection is specified, log a warning
+        if collection_name and collection_name != self._collection_name:
+            self.logger.warning({
+                "action": "VECTOR_STORE_BM25_COLLECTION_WARNING",
+                "message": f"BM25 search only works with default collection '{self._collection_name}', ignoring specified collection '{collection_name}'",
+                "data": {"specified_collection": collection_name, "default_collection": self._collection_name}
+            })
             
         try:
             # Tokenize the query
@@ -433,45 +605,74 @@ class ChromaDBStore(VectorStore):
             # Sort documents by score
             sorted_docs = sorted(doc_scores.items(), key=lambda x: x[1], reverse=True)
             
-            # Apply filters if specified
-            if filters:
-                # Get all document IDs that match the filters
-                results = self._collection.get(where=filters)
-                filter_ids = set(results["ids"])
-                
-                # Filter sorted docs
-                sorted_docs = [(doc_id, score) for doc_id, score in sorted_docs if doc_id in filter_ids]
+            # Apply filters if provided
+            filtered_docs = []
             
-            # Limit to top results
-            top_results = sorted_docs[:num_results]
+            # Convert to standard format
+            results = []
             
-            # Get document content for top results
-            formatted_results = []
-            for doc_id, score in top_results:
-                try:
-                    # Get document from ChromaDB
-                    result = self._collection.get(ids=[doc_id])
+            # Get the collection to retrieve document content
+            collection = self._client.get_collection(name=self._collection_name)
+            
+            # Add top results
+            count = 0
+            for doc_id, score in sorted_docs:
+                if count >= num_results:
+                    break
                     
-                    if result["documents"] and len(result["documents"]) > 0:
-                        formatted_results.append({
-                            "id": doc_id,
-                            "text": result["documents"][0],
-                            "metadata": result["metadatas"][0] if result["metadatas"] else {},
-                            "score": score  # BM25 score
-                        })
+                # Look up the ChromaDB ID for this document
+                chroma_id = self._doc_id_map.get(doc_id, doc_id)
+                
+                # Get the document from ChromaDB
+                try:
+                    doc_data = collection.get(ids=[chroma_id])
+                    
+                    if not doc_data["documents"] or not doc_data["documents"][0]:
+                        continue
+                        
+                    text = doc_data["documents"][0]
+                    metadata = doc_data["metadatas"][0] if "metadatas" in doc_data and doc_data["metadatas"] else {}
+                    
+                    # Apply filters if provided
+                    if filters:
+                        # Simple filtering implementation
+                        match = True
+                        for key, value in filters.items():
+                            if key not in metadata or metadata[key] != value:
+                                match = False
+                                break
+                                
+                        if not match:
+                            continue
+                    
+                    # Add to results
+                    results.append({
+                        "text": text,
+                        "metadata": metadata,
+                        "score": score,
+                        "id": doc_id
+                    })
+                    
+                    count += 1
+                    
                 except Exception as e:
                     self.logger.warning({
-                        "action": "VECTOR_STORE_BM25_DOC_ERROR",
-                        "message": f"Failed to get document {doc_id}: {str(e)}"
+                        "action": "VECTOR_STORE_BM25_DOC_RETRIEVAL_ERROR",
+                        "message": f"Failed to retrieve document {doc_id}: {str(e)}",
+                        "data": {"doc_id": doc_id, "error": str(e)}
                     })
+                    continue
             
             self.logger.info({
                 "action": "VECTOR_STORE_BM25_SEARCH",
-                "message": f"BM25 search returned {len(formatted_results)} results",
-                "data": {"query": query, "results": len(formatted_results)}
+                "message": f"BM25 search returned {len(results)} results",
+                "data": {
+                    "query": query,
+                    "results_count": len(results)
+                }
             })
             
-            return formatted_results
+            return results
             
         except Exception as e:
             self.logger.error({
@@ -629,19 +830,27 @@ class ChromaDBStore(VectorStore):
         query: str,
         num_results: int = 5,
         filters: Optional[Dict[str, Any]] = None,
+        collection_name: Optional[str] = None,
         max_wait_time: int = 60  # Maximum time to wait for indexing (seconds)
     ) -> List[Dict[str, Any]]:
         """
-        Async version of keyword search that waits for BM25 index to be built.
+        Perform keyword-based search asynchronously, waiting for indexing to complete.
+        
+        This method will wait if BM25 indexing is in progress, up to the max_wait_time limit.
         
         Args:
             query: The keyword query string
             num_results: Maximum number of results to return
             filters: Optional metadata filters
-            max_wait_time: Maximum time to wait for indexing (seconds)
+            collection_name: Optional name of the collection to search in.
+                             If None, the default collection will be used.
+            max_wait_time: Maximum time to wait for indexing to complete (seconds)
             
         Returns:
             List of documents with BM25 scores
+            
+        Raises:
+            VectorStoreError: If search fails or times out
         """
         if not self._is_initialized:
             raise VectorStoreError("Vector store not initialized. Call initialize() first.")
@@ -654,32 +863,26 @@ class ChromaDBStore(VectorStore):
             return []
             
         # Wait for indexing to complete if in progress
-        wait_time = 0
-        while self._bm25_indexing_in_progress and wait_time < max_wait_time:
-            # Print a message to console about waiting
-            sleep_interval = 1
-            print(f"Waiting for BM25 index to be built... (sleeping for {sleep_interval} seconds)")
-            await asyncio.sleep(sleep_interval)
-            wait_time += sleep_interval
+        start_time = time.time()
+        while self._bm25_indexing_in_progress:
+            # Check if we've exceeded the wait time
+            if time.time() - start_time > max_wait_time:
+                self.logger.warning({
+                    "action": "VECTOR_STORE_BM25_WAIT_TIMEOUT",
+                    "message": f"Exceeded maximum wait time ({max_wait_time}s) for BM25 indexing to complete"
+                })
+                break
+                
+            # Wait a bit before checking again
+            await asyncio.sleep(0.5)
             
-        # If we're still indexing after max wait time, return empty results
-        if self._bm25_indexing_in_progress:
-            self.logger.warning({
-                "action": "VECTOR_STORE_BM25_WAIT_TIMEOUT",
-                "message": f"Exceeded maximum wait time ({max_wait_time}s) for BM25 indexing to complete"
-            })
-            return []
-            
-        # If no index after waiting, return empty results
-        if not self._bm25_index:
-            self.logger.warning({
-                "action": "VECTOR_STORE_BM25_NO_INDEX",
-                "message": "BM25 index not built"
-            })
-            return []
-            
-        # Use the existing keyword_search implementation
-        return self.keyword_search(query, num_results, filters)
+        # Perform the search
+        return self.keyword_search(
+            query=query,
+            num_results=num_results,
+            filters=filters,
+            collection_name=collection_name
+        )
     
     def _tokenize(self, text: str) -> List[str]:
         """
@@ -706,13 +909,16 @@ class ChromaDBStore(VectorStore):
         self,
         document_ids: Optional[List[str]] = None,
         filters: Optional[Dict[str, Any]] = None,
+        collection_name: Optional[str] = None,
     ) -> int:
         """
-        Delete documents from the vector store by ID or filter.
+        Delete documents from the vector store.
         
         Args:
-            document_ids: List of document IDs to delete
-            filters: Metadata filters to select documents for deletion
+            document_ids: Optional list of document IDs to delete
+            filters: Optional metadata filters to select documents for deletion
+            collection_name: Optional name of the collection to delete from.
+                             If None, the default collection will be used.
             
         Returns:
             Number of documents deleted
@@ -724,74 +930,134 @@ class ChromaDBStore(VectorStore):
             raise VectorStoreError("Vector store not initialized. Call initialize() first.")
         
         if not document_ids and not filters:
-            raise VectorStoreError("Either document_ids or filters must be provided")
+            self.logger.warning({
+                "action": "VECTOR_STORE_EMPTY_DELETE",
+                "message": "No document IDs or filters provided for deletion"
+            })
+            return 0
         
         try:
-            # Record the initial count to determine how many were deleted
-            initial_count = await self.count()
+            # Use provided collection name or default
+            target_collection_name = collection_name or self._collection_name
             
-            # Delete by ID if provided
+            # Get the specified collection
+            try:
+                collection = self._client.get_collection(name=target_collection_name)
+                self.logger.info({
+                    "action": "VECTOR_STORE_COLLECTION_FOUND",
+                    "message": f"Found collection '{target_collection_name}' for delete operation"
+                })
+            except Exception as e:
+                self.logger.warning({
+                    "action": "VECTOR_STORE_COLLECTION_NOT_FOUND",
+                    "message": f"Collection '{target_collection_name}' not found for delete operation",
+                    "data": {"error": str(e)}
+                })
+                return 0
+            
+            # Handle ID-based deletion
             if document_ids:
-                self._collection.delete(ids=document_ids)
+                self.logger.info({
+                    "action": "VECTOR_STORE_DELETE_IDS",
+                    "message": f"Deleting {len(document_ids)} documents by ID",
+                    "data": {"collection_name": target_collection_name, "count": len(document_ids)}
+                })
+                collection.delete(ids=document_ids)
                 
-            # Delete by filter if provided
+                # If this is the default collection, update BM25 index
+                if self._enable_bm25 and target_collection_name == self._collection_name:
+                    # Remove from BM25 index
+                    for doc_id in document_ids:
+                        if doc_id in self._doc_id_map:
+                            del self._doc_id_map[doc_id]
+                
+                return len(document_ids)
+            
+            # Handle filter-based deletion
             elif filters:
-                self._collection.delete(where=filters)
-            
-            # Calculate number of deleted documents
-            final_count = await self.count()
-            deleted_count = initial_count - final_count
-            
-            self.logger.info({
-                "action": "VECTOR_STORE_DELETE",
-                "message": f"Deleted {deleted_count} documents from vector store",
-                "data": {
-                    "deleted_count": deleted_count,
-                    "by_ids": document_ids is not None,
-                    "by_filters": filters is not None
-                }
-            })
-            
-            return deleted_count
+                # First get matching documents to count them
+                results = collection.get(where=filters)
+                matched_ids = results.get("ids", [])
+                matched_count = len(matched_ids)
+                
+                if matched_count > 0:
+                    self.logger.info({
+                        "action": "VECTOR_STORE_DELETE_FILTERS",
+                        "message": f"Deleting {matched_count} documents by filter",
+                        "data": {"collection_name": target_collection_name, "count": matched_count}
+                    })
+                    collection.delete(where=filters)
+                    
+                    # If this is the default collection, update BM25 index
+                    if self._enable_bm25 and target_collection_name == self._collection_name:
+                        # Remove from BM25 index
+                        for doc_id in matched_ids:
+                            if doc_id in self._doc_id_map:
+                                del self._doc_id_map[doc_id]
+                    
+                return matched_count
             
         except Exception as e:
             self.logger.error({
                 "action": "VECTOR_STORE_DELETE_ERROR",
-                "message": f"Document deletion failed: {str(e)}",
+                "message": f"Failed to delete documents: {str(e)}",
                 "data": {"error": str(e), "error_type": type(e).__name__}
             })
-            raise VectorStoreError(f"Delete operation failed: {str(e)}") from e
+            raise VectorStoreError(f"Failed to delete documents: {str(e)}") from e
     
-    async def count(self, filters: Optional[Dict[str, Any]] = None) -> int:
+    async def count(self, filters: Optional[Dict[str, Any]] = None, collection_name: Optional[str] = None) -> int:
         """
-        Count documents in the vector store, optionally filtered by metadata.
+        Count documents in the vector store.
         
         Args:
-            filters: Optional metadata filters
+            filters: Optional metadata filters to apply
+            collection_name: Optional name of the collection to count in.
+                             If None, the default collection will be used.
             
         Returns:
             Number of documents matching the filter
             
         Raises:
-            VectorStoreError: If count operation fails
+            VectorStoreError: If counting fails
         """
         if not self._is_initialized:
             raise VectorStoreError("Vector store not initialized. Call initialize() first.")
         
         try:
-            if filters:
-                # For filtered count, we need to get all IDs that match the filter
-                result = self._collection.get(where=filters)
-                count = len(result["ids"]) if result["ids"] else 0
-            else:
-                # Get all document IDs (unfiltered count)
-                result = self._collection.get()
-                count = len(result["ids"]) if result["ids"] else 0
+            # Use provided collection name or default
+            target_collection_name = collection_name or self._collection_name
             
-            self.logger.debug({
+            # Get the specified collection
+            try:
+                collection = self._client.get_collection(name=target_collection_name)
+                self.logger.info({
+                    "action": "VECTOR_STORE_COLLECTION_FOUND",
+                    "message": f"Found collection '{target_collection_name}' for count operation"
+                })
+            except Exception as e:
+                self.logger.warning({
+                    "action": "VECTOR_STORE_COLLECTION_NOT_FOUND",
+                    "message": f"Collection '{target_collection_name}' not found for count operation",
+                    "data": {"error": str(e)}
+                })
+                return 0
+            
+            # Count with or without filters
+            if filters:
+                results = collection.get(where=filters, include=[])
+                count = len(results["ids"]) if "ids" in results else 0
+            else:
+                results = collection.get(include=[])
+                count = len(results["ids"]) if "ids" in results else 0
+            
+            self.logger.info({
                 "action": "VECTOR_STORE_COUNT",
-                "message": f"Counted {count} documents in vector store",
-                "data": {"count": count, "with_filters": filters is not None}
+                "message": f"Counted {count} documents in collection '{target_collection_name}'",
+                "data": {
+                    "count": count,
+                    "collection_name": target_collection_name,
+                    "has_filters": filters is not None
+                }
             })
             
             return count
@@ -799,10 +1065,10 @@ class ChromaDBStore(VectorStore):
         except Exception as e:
             self.logger.error({
                 "action": "VECTOR_STORE_COUNT_ERROR",
-                "message": f"Count operation failed: {str(e)}",
+                "message": f"Failed to count documents: {str(e)}",
                 "data": {"error": str(e), "error_type": type(e).__name__}
             })
-            raise VectorStoreError(f"Count operation failed: {str(e)}") from e
+            raise VectorStoreError(f"Failed to count documents: {str(e)}") from e
     
     def healthcheck(self) -> Dict[str, Any]:
         """
@@ -872,16 +1138,31 @@ class ChromaDBStore(VectorStore):
                 "data": {"error": str(e), "error_type": type(e).__name__}
             })
         
-        return health_result
-    
-    # This method is intentionally not implemented as it's being deprecated
-    async def store_documents(self, documents: List[Dict[str, Any]]) -> None:
+        return health_result 
+
+    def find_collection_name(self, source: str) -> str:
         """
-        This method is deprecated and should not be used.
+        Get the collection name for a given source.
         
-        Raises:
-            NotImplementedError: Always raises this exception
+        Args:
+            source: Source identifier (e.g., "telegram", "whatsapp")
+            
+        Returns:
+            Collection name to use for this source
         """
-        raise NotImplementedError(
-            "store_documents is deprecated. Use add_documents method instead."
-        ) 
+        if not self._is_initialized:
+            self.logger.warning({
+                "action": "VECTOR_STORE_NOT_INITIALIZED",
+                "message": "Vector store not initialized when finding collection name"
+            })
+            return self._collection_name
+        
+        collection_name = self._source_collection_map.get(source, self._collection_name)
+        
+        self.logger.debug({
+            "action": "VECTOR_STORE_FIND_COLLECTION",
+            "message": f"Source '{source}' mapped to collection '{collection_name}'",
+            "data": {"source": source, "collection": collection_name}
+        })
+        
+        return collection_name 

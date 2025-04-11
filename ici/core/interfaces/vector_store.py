@@ -29,7 +29,7 @@ class VectorStore(ABC):
         pass
 
     @abstractmethod
-    async def store_documents(self, documents: List[Dict[str, Any]]) -> None:
+    async def store_documents(self, documents: List[Dict[str, Any]], collection_name: Optional[str] = None) -> None:
         """
         Stores documents with their vectors, text, and metadata.
 
@@ -40,6 +40,8 @@ class VectorStore(ABC):
 
         Args:
             documents: List of documents to store
+            collection_name: Optional name of the collection to store documents in.
+                             If None, the default collection will be used.
 
         Raises:
             VectorStoreError: If document storage fails for any reason
@@ -52,6 +54,7 @@ class VectorStore(ABC):
         query_vector: List[float],
         num_results: int = 5,
         filters: Optional[Dict[str, Any]] = None,
+        collection_name: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """
         Retrieves the most similar documents based on the query vector.
@@ -66,6 +69,8 @@ class VectorStore(ABC):
             query_vector: The vector to search for
             num_results: Number of results to return
             filters: Optional metadata filters to apply during search
+            collection_name: Optional name of the collection to search in.
+                             If None, the default collection will be used.
 
         Returns:
             List[Dict[str, Any]]: List of documents, each containing:
@@ -83,6 +88,7 @@ class VectorStore(ABC):
         self,
         document_ids: Optional[List[str]] = None,
         filters: Optional[Dict[str, Any]] = None,
+        collection_name: Optional[str] = None,
     ) -> int:
         """
         Deletes documents from the vector store by ID or filter.
@@ -90,6 +96,8 @@ class VectorStore(ABC):
         Args:
             document_ids: Optional list of document IDs to delete
             filters: Optional metadata filters to select documents for deletion
+            collection_name: Optional name of the collection to delete from.
+                             If None, the default collection will be used.
 
         Returns:
             int: Number of documents deleted
@@ -100,12 +108,14 @@ class VectorStore(ABC):
         pass
 
     @abstractmethod
-    async def count(self, filters: Optional[Dict[str, Any]] = None) -> int:
+    async def count(self, filters: Optional[Dict[str, Any]] = None, collection_name: Optional[str] = None) -> int:
         """
         Counts documents in the vector store, optionally filtered by metadata.
 
         Args:
             filters: Optional metadata filters to apply
+            collection_name: Optional name of the collection to count in.
+                             If None, the default collection will be used.
 
         Returns:
             int: Number of documents matching the filter
@@ -135,7 +145,7 @@ class VectorStore(ABC):
 
     @abstractmethod
     async def add_documents(
-        self, documents: List[Dict[str, Any]], vectors: List[List[float]]
+        self, documents: List[Dict[str, Any]], vectors: List[List[float]], collection_name: Optional[str] = None
     ) -> List[str]:
         """
         Stores documents along with their vector embeddings.
@@ -143,6 +153,8 @@ class VectorStore(ABC):
         Args:
             documents: List of documents to store
             vectors: List of vector embeddings for the documents
+            collection_name: Optional name of the collection to store documents in.
+                             If None, the default collection will be used.
 
         Returns:
             List[str]: List of document IDs

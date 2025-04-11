@@ -405,22 +405,22 @@ class DefaultIngestionPipeline(IngestionPipeline):
         }
         
         try:
+            # Get registered components
+            ingestor = self._ingestors[ingestor_id]["ingestor"]
+            preprocessor = self._ingestors[ingestor_id]["preprocessor"]
+            
             self.logger.info({
                 "action": "PIPELINE_RUN_START",
-                "message": f"Starting ingestion for {ingestor_id}",
+                "message": f"Starting ingestion process for {ingestor_id}",
                 "data": {"ingestor_id": ingestor_id}
             })
             
-            # Get components for this ingestor
-            components = self._ingestors[ingestor_id]
-            ingestor = components["ingestor"]
-            preprocessor = components["preprocessor"]
+            # Get the current timestamp before fetching data
+            # This will be the new state timestamp for successful run
+            current_time = datetime.now(timezone.utc)
             
-            # Get ingestor state
+            # Get the current state for this ingestor
             state = self._state_manager.get_state(ingestor_id)
-            last_timestamp = state.get("last_timestamp", 0)
-            metadata = state.get("additional_metadata", {})
-            
             # For WhatsApp ingestor, check authentication if needed
             if isinstance(ingestor, WhatsAppIngestor):
                 # Check if WhatsApp is authenticated
@@ -451,9 +451,23 @@ class DefaultIngestionPipeline(IngestionPipeline):
                         results["errors"].append(error_message)
                         results["message"] = "Authentication timeout"
                         return self._finalize_results(results, start_time)
+
+            last_timestamp = state["last_timestamp"] if state else 0
+            metadata = state["metadata"] if state and "metadata" in state else {}
             
-            # Fetch data based on ingestor type and state
-            raw_data = None
+            self.logger.info({
+                "action": "PIPELINE_STATE_LOADED",
+                "message": f"Loaded state for {ingestor_id}",
+                "data": {
+                    "last_timestamp": last_timestamp,
+                    "last_run": metadata.get("last_run", "never"),
+                    "ingestor_id": ingestor_id
+                }
+            })
+            
+            # Initialize variables
+            messages = []
+            latest_timestamp = last_timestamp
             
             # Determine fetch mode based on state
             if last_timestamp == 0:
@@ -494,24 +508,38 @@ class DefaultIngestionPipeline(IngestionPipeline):
                 "data": {"document_count": total_documents}
             })
             
+            # Update timestamps for state tracking
+            if hasattr(ingestor, "extract_timestamps"):
+                # Get timestamps from all messages to find the latest
+                # First check if we have a messages or conversation-based structure
+                if raw_data.get("messages"):
+                    messages = raw_data.get("messages", [])
+                    timestamps = ingestor.extract_timestamps(messages)
+                    if timestamps:
+                        latest_timestamp = max(timestamps)
+                # Handle conversation-based structure
+                elif raw_data.get("conversations"):
+                    all_conversations_messages = []
+                    for conversation_id, conversation_messages in raw_data.get("conversations", {}).items():
+                        all_conversations_messages.extend(conversation_messages)
+                    messages = all_conversations_messages
+                    
+                    # Extract timestamps
+                    timestamps = ingestor.extract_timestamps(messages)
+                    if timestamps:
+                        latest_timestamp = max(timestamps)
+            
             # Process documents in batches
             total_documents_processed = 0
-            latest_timestamp = last_timestamp
             
-            # Find messages sorted by timestamp for state tracking
-            messages = raw_data.get("messages", [])
-            if messages:
-                sorted_messages = sorted(messages, key=lambda m: m.get("timestamp", 0))
-                
-                # Get timestamp from latest message
-                latest_message = sorted_messages[-1]
-                # Convert to seconds if needed (WhatsApp uses milliseconds)
-                message_timestamp = latest_message.get("timestamp", 0)
-                if message_timestamp > 1600000000000:  # Likely milliseconds
-                    message_timestamp = message_timestamp / 1000
-                
-                if message_timestamp > latest_timestamp:
-                    latest_timestamp = message_timestamp
+            # Get the appropriate collection name for this ingestor
+            collection_name = self._vector_store.find_collection_name(ingestor_id)
+            
+            self.logger.info({
+                "action": "PIPELINE_VECTOR_STORE_COLLECTION",
+                "message": f"Using collection '{collection_name}' for ingestor '{ingestor_id}'",
+                "data": {"ingestor_id": ingestor_id, "collection_name": collection_name}
+            })
             
             # Process documents in batches
             for i in range(0, len(documents), self._batch_size):
@@ -533,8 +561,12 @@ class DefaultIngestionPipeline(IngestionPipeline):
                         })
                         vectors_list.append(embedding)
                     
-                    # Add to vector store
-                    await self._vector_store.add_documents(documents=document_list, vectors=vectors_list)
+                    # Add to vector store using the appropriate collection
+                    await self._vector_store.add_documents(
+                        documents=document_list, 
+                        vectors=vectors_list,
+                        collection_name=collection_name
+                    )
 
                     # Update count
                     total_documents_processed += len(batch)
@@ -584,12 +616,52 @@ class DefaultIngestionPipeline(IngestionPipeline):
             
             return self._finalize_results(results, start_time)
             
+        except DataFetchError as e:
+            error_msg = f"Data fetch error: {str(e)}"
+            self.logger.error({
+                "action": "DATA_FETCH_ERROR",
+                "message": error_msg,
+                "data": {"ingestor_id": ingestor_id, "error": str(e)}
+            })
+            results["errors"].append(error_msg)
+            return self._finalize_results(results, start_time)
+            
+        except PreprocessorError as e:
+            error_msg = f"Preprocessing error: {str(e)}"
+            self.logger.error({
+                "action": "PREPROCESSING_ERROR",
+                "message": error_msg,
+                "data": {"ingestor_id": ingestor_id, "error": str(e)}
+            })
+            results["errors"].append(error_msg)
+            return self._finalize_results(results, start_time)
+            
+        except EmbeddingError as e:
+            error_msg = f"Embedding error: {str(e)}"
+            self.logger.error({
+                "action": "EMBEDDING_ERROR",
+                "message": error_msg,
+                "data": {"ingestor_id": ingestor_id, "error": str(e)}
+            })
+            results["errors"].append(error_msg)
+            return self._finalize_results(results, start_time)
+            
+        except VectorStoreError as e:
+            error_msg = f"Vector store error: {str(e)}"
+            self.logger.error({
+                "action": "VECTOR_STORE_ERROR",
+                "message": error_msg,
+                "data": {"ingestor_id": ingestor_id, "error": str(e)}
+            })
+            results["errors"].append(error_msg)
+            return self._finalize_results(results, start_time)
+            
         except Exception as e:
             error_message = f"Ingestion failed for {ingestor_id}: {str(e)}"
             self.logger.error({
                 "action": "PIPELINE_RUN_ERROR",
                 "message": error_message,
-                "data": {"error": str(e), "error_type": type(e).__name__}
+                "data": {"error": str(e), "error_type": type(e).__name__, "traceback": traceback.format_exc()}
             })
             results["errors"].append(error_message)
             return self._finalize_results(results, start_time)
