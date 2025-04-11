@@ -14,6 +14,7 @@ from ici.core.interfaces.preprocessor import Preprocessor
 from ici.adapters.loggers import StructuredLogger
 from ici.core.exceptions import PreprocessorError
 from ici.utils.config import get_component_config, load_config
+from ici.utils.metadata_utils import sanitize_metadata_for_vector_store
 
 
 class WhatsAppPreprocessor(Preprocessor):
@@ -185,7 +186,7 @@ class WhatsAppPreprocessor(Preprocessor):
                 return []
             
             # Save complete export
-            with open("db/whatsapp_chats/chat_export.json", "w", encoding="utf-8") as f:
+            with open("db/whatsapp/chat_export.json", "w", encoding="utf-8") as f:
                 json.dump(raw_data, f, indent=2, ensure_ascii=False)
             
             # Process each chat
@@ -241,6 +242,66 @@ class WhatsAppPreprocessor(Preprocessor):
             })
             raise PreprocessorError(error_message) from e
     
+    def _is_reply(self, message: Dict[str, Any]) -> bool:
+        """
+        Check if a message is a reply to another message.
+        
+        Args:
+            message: Message to check
+            
+        Returns:
+            bool: True if it's a reply, False otherwise
+        """
+        return bool(
+            message.get("hasQuotedMsg", False) or 
+            message.get("quotedMsgId") or 
+            message.get("quoted_msg_id") or
+            message.get("reply_to_id")
+        )
+
+    def _extract_reply_info(self, message: Dict[str, Any], all_messages: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """
+        Extract information about the message being replied to.
+        
+        Args:
+            message: Message to extract reply info from
+            all_messages: All messages in the chat for reference lookup
+            
+        Returns:
+            Dict[str, Any]: Reply information or None if not a reply
+        """
+        if not self._is_reply(message):
+            return None
+        
+        # Get the ID of the message being replied to
+        quoted_msg_id = (
+            message.get("quotedMsgId") or 
+            message.get("quoted_msg_id") or 
+            message.get("reply_to_id")
+        )
+        
+        if not quoted_msg_id:
+            return None
+        
+        # Look for the quoted message across all messages
+        for msg in all_messages:
+            if msg.get("id") == quoted_msg_id:
+                return {
+                    "id": quoted_msg_id,
+                    "sender_name": self._extract_author(msg),
+                    "timestamp": self._extract_timestamp(msg),
+                    "text": (msg.get("text", "") or msg.get("body", ""))[:100] + 
+                           ("..." if len(msg.get("text", "") or msg.get("body", "")) > 100 else "")
+                }
+        
+        # Fallback for missing message data
+        return {
+            "id": quoted_msg_id,
+            "sender_name": message.get("quotedParticipant", "Unknown"),
+            "text": message.get("quotedMsg", "Incomplete message data..."),
+            "is_partial": True
+        }
+
     def _process_messages_with_context(
         self, 
         sorted_messages: List[Dict[str, Any]],
@@ -251,6 +312,7 @@ class WhatsAppPreprocessor(Preprocessor):
     ) -> List[Dict[str, Any]]:
         """
         Process messages with context windows to create documents.
+        Each message becomes a separate document with neighboring message IDs in metadata.
         
         Args:
             sorted_messages: List of messages sorted by timestamp
@@ -265,65 +327,86 @@ class WhatsAppPreprocessor(Preprocessor):
         documents = []
         
         for i, current_message in enumerate(sorted_messages):
-            # Get context window (-2/+2 messages)
-            start_idx = max(0, i - 2)
-            end_idx = min(len(sorted_messages), i + 3)  # +3 because end index is exclusive
-            context_window = sorted_messages[start_idx:end_idx]                                                                                                 
+            # Clearly separate the messages into primary, previous, and next
+            primary_message = current_message
             
-            # Ensure messages have required fields for formatting
-            formatted_context = []
-            for msg in context_window:
-                # Create a copy to avoid modifying the original messages
-                formatted_msg = msg.copy()
-                
-                # Ensure chat_name is included
-                if "chat_name" not in formatted_msg:
-                    formatted_msg["chat_name"] = chat_name
-                
-                # Extract and add sender info
-                if "sender_name" not in formatted_msg:
-                    formatted_msg["sender_name"] = self._extract_author(msg)
-                
-                # Add sender_id for Me identification
-                if "sender_id" not in formatted_msg:
-                    if msg.get("fromMe"):
-                        formatted_msg["sender_id"] = self._my_user_id
-                
-                # Convert body to text for formatting
-                if "text" not in formatted_msg and "body" in msg:
-                    formatted_msg["text"] = msg["body"].strip()
-                
-                # Add chat type
-                if "chat_type" not in formatted_msg:
-                    formatted_msg["chat_type"] = chat_type
-                
-                formatted_context.append(formatted_msg)
+            # Get previous messages (up to 5)
+            start_idx = max(0, i - 5)
+            previous_messages = sorted_messages[start_idx:i]
             
-            # Use _format_conversation to get formatted text
-            formatted_text = self._format_conversation(formatted_context)
+            # Get next messages (up to 5)
+            end_idx = min(len(sorted_messages), i + 6)  # +6 because end index is exclusive
+            next_messages = sorted_messages[i+1:end_idx]
             
-            # Extract metadata from the main message
-            main_author = self._extract_author(current_message)
-            main_timestamp = self._extract_timestamp(current_message)
+            # Format raw message text
+            message_text = self._format_conversation([primary_message])
+            
+            # Extract main message details
+            message_id = primary_message.get("id", "")
+            main_author = self._extract_author(primary_message)
+            main_timestamp = self._extract_timestamp(primary_message)
             main_datetime = self._format_datetime(main_timestamp)
             
-            # Create document with metadata
+            # Extract IDs from previous and next messages
+            previous_message_ids = [msg.get("id", "") for msg in previous_messages]
+            next_message_ids = [msg.get("id", "") for msg in next_messages]
+            
+            # Extract reply information
+            is_reply = self._is_reply(primary_message)
+            reply_to_id = None
+            reply_data = None
+            
+            if is_reply:
+                # Get the ID of the message being replied to
+                reply_to_id = (
+                    primary_message.get("quotedMsgId") or 
+                    primary_message.get("quoted_msg_id") or 
+                    primary_message.get("reply_to_id")
+                )
+                
+                # Get detailed information about the replied message
+                reply_data = self._extract_reply_info(primary_message, sorted_messages)
+                
+                # Log for debugging
+                self.logger.debug({
+                    "action": "REPLY_INFO_EXTRACTED",
+                    "message": f"Extracted reply information for message {message_id}",
+                    "data": {
+                        "message_id": message_id,
+                        "reply_to_id": reply_to_id,
+                        "reply_data": reply_data
+                    }
+                })
+            
+            # Create metadata
+            metadata = {
+                "source": "whatsapp",
+                "chat_id": chat_id,
+                "conversation_id": chat_id,  # Add for consistency
+                "chat_name": chat_name,
+                "is_group": is_group,
+                "chat_type": chat_type,
+                "author": main_author,
+                "sender_name": main_author,
+                "timestamp": main_timestamp,
+                "date": main_datetime,
+                "message_id": message_id,
+                "previous_message_ids": previous_message_ids,
+                "next_message_ids": next_message_ids,
+                "neighboring_message_ids": previous_message_ids + next_message_ids,
+                "is_reply": is_reply,
+                "reply_to_id": reply_to_id,
+                "reply_data": reply_data
+            }
+            
+            # Sanitize metadata for vector store compatibility
+            sanitized_metadata = sanitize_metadata_for_vector_store(metadata)
+            
+            # Create document with sanitized metadata
             document = {
-                "text": formatted_text,
-                "metadata": {
-                    "source": "whatsapp",
-                    "chat_id": chat_id,
-                    "chat_name": chat_name,
-                    "is_group": is_group,
-                    "chat_type": chat_type,
-                    "author": main_author,
-                    "timestamp": main_timestamp,
-                    "datetime": main_datetime,
-                    "message_id": current_message.get("id", ""),
-                    "context_size": len(context_window) - 1,
-                    "context_before": i - start_idx,
-                    "context_after": end_idx - i - 1
-                }
+                "id": message_id,
+                "text": message_text,
+                "metadata": sanitized_metadata
             }
             
             documents.append(document)
@@ -596,51 +679,31 @@ class WhatsAppPreprocessor(Preprocessor):
 
     def _format_conversation(self, messages: List[Dict[str, Any]]) -> str:
         """
-        Format a group of messages as a conversation.
+        Format a message as raw text without additional formatting.
         
         Args:
-            messages: List of WhatsApp message dictionaries
+            messages: List of WhatsApp message dictionaries. We'll only use the current message.
             
         Returns:
-            str: Formatted conversation text
+            str: Raw message text
         """
         if not messages:
             return ""
         
-        formatted_lines = []
+        # Just return the raw text of the message
+        message = messages[0]  # Use the first message as the primary one
         
-        # Get chat metadata
-        chat_name = messages[0].get("chat_name", "Unknown Chat")
-        chat_type = messages[0].get("chat_type", "private")
+        # Get the basic text
+        text = message.get("text", "") or message.get("body", "")
         
-        # Format each message
-        for message in messages:
-            # Extract message details
-            sender_id = message.get("sender_id", "")
-            sender_name = message.get("sender_name", "Unknown")
-            text = message.get("text", "")
-            timestamp = message.get("timestamp", "")
+        # Add media information if present
+        if message.get("has_media", False):
+            media_type = message.get("media_type", "unknown")
+            media_caption = message.get("media_caption", "")
             
-            # Format timestamp 
-            formatted_time = self._format_datetime(timestamp)
+            if media_caption:
+                text += f" {media_caption}"
             
-            # Check if message is from the user themselves
-            is_me = self._my_user_id and str(sender_id) == str(self._my_user_id)
-            display_name = "Me" if is_me else sender_name
-            
-            # Format in the specified structure
-            formatted_message = f"(author is {display_name}, datetime is {formatted_time}, source is whatsapp, chatname is {chat_name} and chattype: {chat_type}) message is - {text}"
-            formatted_lines.append(formatted_message)
-            
-            # Add media information if present
-            if message.get("has_media", False):
-                media_type = message.get("media_type", "unknown")
-                media_caption = message.get("media_caption", "")
-                
-                media_info = f"[{media_type.capitalize()} attachment]"
-                if media_caption:
-                    media_info += f" Caption: {media_caption}"
-                
-                formatted_lines.append(f"  {media_info}")
+            text += f" [{media_type.capitalize()} attachment]"
         
-        return "\n\n".join(formatted_lines) 
+        return text 

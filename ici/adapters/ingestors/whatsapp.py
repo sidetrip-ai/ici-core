@@ -244,103 +244,118 @@ class WhatsAppIngestor(Ingestor):
         additional_log_data=None
     ) -> Dict[str, Any]:
         """
-        Common function for fetching chat data with optional filtering.
+        Fetch chat data with optional filtering.
         
         Args:
-            message_filter: Optional async function to filter messages
-                Should accept (chat_id) and return filtered messages
-            log_prefix: Prefix for log action names
-            additional_log_data: Optional additional data to include in logs
+            message_filter: Optional filter function for messages
+            log_prefix: Prefix for logging actions
+            additional_log_data: Additional data to include in logs
             
         Returns:
-            Dict with conversations organized by chat_id
+            Dict[str, Any]: Dictionary containing conversations and message counts
             
         Raises:
-            ConfigurationError: If ingestor is not initialized
             DataFetchError: If data fetch fails
         """
         if not self._is_initialized:
             raise ConfigurationError("Ingestor not initialized. Call initialize() first.")
         
+        # Ensure authenticated
+        await self._ensure_session()
+        
+        # Log start of fetching
+        log_data = {"session_id": self._session_id}
+        if additional_log_data:
+            log_data.update(additional_log_data)
+            
+        self.logger.info({
+            "action": f"{log_prefix}_START",
+            "message": "Starting WhatsApp data fetch",
+            "data": log_data
+        })
+        
         try:
-            # Ensure session is connected
-            await self._ensure_session()
-            
-            log_data = additional_log_data or {}
-            
-            self.logger.info({
-                "action": f"{log_prefix}_START",
-                "message": "Fetching WhatsApp messages",
-                "data": log_data
-            })
-            
-            # Fetch all chats
+            # Fetch chats
             chats = await self._fetch_chats()
             
-            # Fetch messages for each chat and organize by chat_id
-            conversations = {}
-            total_messages = 0
+            # Prepare result format
+            result = {
+                "conversations": {}
+            }
             
+            total_messages = 0
+            total_reply_messages = 0
+            
+            # Fetch messages for each chat
             for chat in chats:
                 chat_id = chat.get("id")
                 if not chat_id:
                     continue
                 
-                try:
-                    # Fetch and filter messages
-                    if message_filter:
-                        messages = await message_filter(chat_id)
-                    else:
-                        messages = await self._fetch_chat_messages(chat_id)
-                    
-                    # Skip if no messages
-                    if not messages:
-                        continue
-                        
-                    # Add chat info to each message
-                    for msg in messages:
-                        msg["chatId"] = chat_id
-                        msg["chatName"] = chat.get("name")
-                        msg["isGroup"] = chat.get("isGroup", False)
-                    
-                    # Add to conversations
-                    conversations[chat_id] = messages
-                    total_messages += len(messages)
-                    
-                except Exception as e:
-                    self.logger.warning({
-                        "action": f"FETCH_CHAT_MESSAGES_ERROR",
-                        "message": f"Error fetching messages for chat {chat_id}: {str(e)}",
-                        "data": {"chat_id": chat_id, "error": str(e)}
-                    })
+                # Apply filter function if provided, otherwise fetch all messages
+                if message_filter:
+                    messages = await message_filter(chat_id)
+                else:
+                    messages = await self._fetch_chat_messages(chat_id)
+                
+                # Calculate reply statistics for this chat
+                reply_count = sum(1 for msg in messages if self._is_reply(msg))
+                total_reply_messages += reply_count
+                
+                # Add chat name to each message for better context
+                for message in messages:
+                    message["chat_name"] = chat.get("name", "Unknown Chat")
+                    # Add reply flag for easier identification
+                    message["is_reply"] = self._is_reply(message)
+                
+                # Add messages to result
+                result["conversations"][chat_id] = messages
+                total_messages += len(messages)
+                
+                # Log progress
+                self.logger.info({
+                    "action": f"{log_prefix}_CHAT_COMPLETE",
+                    "message": f"Fetched {len(messages)} messages from chat {chat.get('name', 'Unknown')}",
+                    "data": {
+                        "chat_id": chat_id,
+                        "message_count": len(messages),
+                        "reply_count": reply_count,
+                        "reply_percentage": f"{(reply_count / len(messages) * 100):.1f}%" if messages else "0%"
+                    }
+                })
             
-            # Combine log data with results
-            complete_log_data = {
+            # Add metadata
+            result["metadata"] = {
+                "source": "whatsapp",
+                "total_chats": len(chats),
                 "total_messages": total_messages,
-                "chat_count": len(conversations)
+                "total_reply_messages": total_reply_messages,
+                "reply_percentage": f"{(total_reply_messages / total_messages * 100):.1f}%" if total_messages else "0%",
+                "fetch_time": datetime.now(timezone.utc).isoformat()
             }
-            if additional_log_data:
-                complete_log_data.update(additional_log_data)
             
+            # Log completion
             self.logger.info({
                 "action": f"{log_prefix}_COMPLETE",
-                "message": f"Fetched {total_messages} messages from {len(conversations)} chats",
-                "data": complete_log_data
+                "message": f"Completed WhatsApp data fetch: {len(chats)} chats, {total_messages} messages",
+                "data": {
+                    "chat_count": len(chats),
+                    "message_count": total_messages,
+                    "reply_count": total_reply_messages
+                }
             })
             
-            return {
-                "conversations": conversations
-            }
+            return result
             
         except Exception as e:
-            error_log_data = {"error": str(e), "error_type": type(e).__name__}
-            if additional_log_data:
-                error_log_data.update(additional_log_data)
-            
             self.logger.error({
                 "action": f"{log_prefix}_ERROR",
                 "message": f"Error fetching WhatsApp data: {str(e)}",
-                "data": error_log_data
+                "data": {
+                    "error": str(e),
+                    "error_type": type(e).__name__,
+                    "session_id": self._session_id
+                }
             })
             raise DataFetchError(f"Failed to fetch WhatsApp data: {str(e)}") from e
     
@@ -608,17 +623,42 @@ class WhatsAppIngestor(Ingestor):
                     data = await response.json()
                     messages = data.get("messages", [])
                     
-                    # Transform messages to ensure they have sender_id field
+                    # Transform messages to ensure they have all required fields
                     for message in messages:
                         # Map author or from to sender_id for consistent identification
                         if "author" in message:
                             message["sender_id"] = message["author"]
                         elif "from" in message:
                             message["sender_id"] = message["from"]
+                        
+                        # Process reply/quoted message data if available
+                        if message.get("hasQuotedMsg", False):
+                            self.logger.debug({
+                                "action": "QUOTED_MESSAGE_DETECTED",
+                                "message": f"Found quoted message in {message.get('id', 'unknown')}",
+                                "data": {
+                                    "message_id": message.get("id"),
+                                    "has_quoted_msg": message.get("hasQuotedMsg"),
+                                    "quoted_msg_id": message.get("quotedMsgId"),
+                                    "quoted_participant": message.get("quotedParticipant")
+                                }
+                            })
+                            
+                            # Standardize reply fields for consistency with Telegram
+                            message["reply_to_id"] = message.get("quotedMsgId")
+                            
+                            # Include quoted message data if available
+                            if "quotedMsg" in message:
+                                quoted_msg = message.get("quotedMsg", {})
+                                message["reply_data"] = {
+                                    "text": quoted_msg.get("body", ""),
+                                    "sender_id": quoted_msg.get("sender", ""),
+                                    "timestamp": quoted_msg.get("timestamp")
+                                }
                     
                     self.logger.debug({
                         "action": "MESSAGES_TRANSFORMED",
-                        "message": f"Added sender_id to {len(messages)} messages",
+                        "message": f"Added sender_id and reply data to {len(messages)} messages",
                         "data": {"chat_id": chat_id, "message_count": len(messages)}
                     })
                     
@@ -626,6 +666,15 @@ class WhatsAppIngestor(Ingestor):
                     if messages and len(messages) > 0:
                         # Get the first message keys for debugging
                         first_msg = messages[0]
+                        
+                        # Check for quoted message data
+                        reply_fields = {
+                            "hasQuotedMsg": first_msg.get("hasQuotedMsg", False),
+                            "quotedMsgId": "quotedMsgId" in first_msg,
+                            "reply_to_id": "reply_to_id" in first_msg,
+                            "reply_data": "reply_data" in first_msg
+                        }
+                        
                         self.logger.debug({
                             "action": "MESSAGE_STRUCTURE",
                             "message": "Sample message structure after transformation",
@@ -633,6 +682,7 @@ class WhatsAppIngestor(Ingestor):
                                 "has_sender_id": "sender_id" in first_msg,
                                 "has_author": "author" in first_msg,
                                 "has_from": "from" in first_msg,
+                                "reply_fields": reply_fields,
                                 "keys": list(first_msg.keys())
                             }
                         })
@@ -994,4 +1044,55 @@ class WhatsAppIngestor(Ingestor):
         """
         if self._user_info and "id" in self._user_info:
             return self._user_info["id"]
-        return None 
+        return None
+
+    def _is_reply(self, message: Dict[str, Any]) -> bool:
+        """
+        Check if a message is a reply to another message.
+        
+        Args:
+            message: Message to check
+            
+        Returns:
+            bool: True if it's a reply, False otherwise
+        """
+        return bool(
+            message.get("hasQuotedMsg", False) or
+            message.get("quotedMsgId") or
+            message.get("reply_to_id")
+        )
+
+    def _get_reply_info(self, message: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Extract standardized reply information from a message.
+        
+        Args:
+            message: Message to extract reply info from
+            
+        Returns:
+            Dict[str, Any]: Reply information or empty dict if not a reply
+        """
+        if not self._is_reply(message):
+            return {}
+        
+        reply_info = {
+            "is_reply": True,
+            "reply_to_id": message.get("reply_to_id") or message.get("quotedMsgId")
+        }
+        
+        # Add quoted message data if available
+        if "reply_data" in message:
+            reply_info["reply_data"] = message["reply_data"]
+        elif "quotedMsg" in message:
+            quoted_msg = message.get("quotedMsg", {})
+            reply_info["reply_data"] = {
+                "text": quoted_msg.get("body", ""),
+                "sender_id": quoted_msg.get("sender", ""),
+                "timestamp": quoted_msg.get("timestamp")
+            }
+        
+        # Add quoted participant if available
+        if "quotedParticipant" in message:
+            reply_info["quoted_participant"] = message["quotedParticipant"]
+        
+        return reply_info 

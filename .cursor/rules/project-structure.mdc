@@ -1,0 +1,98 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# Project Structure
+This rule describes the organization of the ICI Core project and provides guidelines for finding and creating files within it.
+
+## Directory Structure Overview
+- `ici/`: Core package containing all main modules
+  - `core/`: Core interfaces and abstractions
+    - `interfaces/`: Base abstract classes and protocols
+    - `exceptions/`: Custom exception classes
+  - `adapters/`: Component implementations
+    - `preprocessors/`: Data preprocessing modules
+    - `ingestors/`: Data ingestion modules
+    - `generators/`: Response generation modules
+    - `embedders/`: Text embedding modules
+    - `vector_stores/`: Vector database adapters
+    - `loggers/`: Logging implementations
+    - `orchestrators/`: Pipeline orchestration modules
+    - `pipelines/`: Pipeline definitions
+    - `chat/`: Chat management modules
+    - `controller/`: Application controllers
+    - `prompt_builders/`: Prompt template handling
+    - `stores/`: Storage adapters
+    - `validators/`: Input validation modules
+    - `user_id/`: User identification handling
+  - `utils/`: Utility functions and helpers
+- `db/`: Database storage for various components
+- `logs/`: Application log files
+- `examples/`: Example code and usage patterns
+- `tests/`: Unit and integration tests
+- `docs/`: Documentation files
+- `chats/`: Stored chat history data
+- `services/`: Supporting service modules
+
+## Configuration
+- `config.yaml`: **Central configuration file**
+  - All component settings are defined here
+  - Do not create new YAML files; modify this file as needed
+  - Environment variables can be referenced using `$VARIABLE_NAME` syntax
+
+## File Naming Conventions
+1. Use lowercase snake_case for all Python files: `example_file.py`
+2. Component implementations should match their interface names: 
+   - Interface: `Preprocessor` → Implementation: `WhatsAppPreprocessor`
+3. Test files should be prefixed with `test_`: `test_whatsapp_preprocessor.py`
+
+## Guidelines for Finding Files
+1. **Component Interfaces**: Check `ici/core/interfaces/` for base class definitions
+2. **Component Implementations**: Find in the appropriate subdirectory of `ici/adapters/`
+3. **Configuration**: All settings are in `config.yaml` at project root
+4. **Utils**: Common helpers are in `ici/utils/`
+
+## Guidelines for Creating New Files
+1. **New Components**:
+   - First check if an appropriate interface exists in `ici/core/interfaces/`
+   - Create implementation in the matching subdirectory under `ici/adapters/`
+   - Follow the interface contract exactly
+   - Do not modify existing interfaces without a good reason
+
+2. **New Adapters**:
+   - For new data sources, create a new adapter in `ici/adapters/ingestors/`
+   - For new models, create a new adapter in `ici/adapters/generators/`
+   - Pattern: place each adapter in its own file under the appropriate category
+
+3. **Tests**:
+   - Create matching test files in the `tests/` directory
+   - Match the directory structure of the implementation
+
+4. **Configuration**:
+   - Do not create new YAML files
+   - Add new configuration sections to the existing `config.yaml` file
+
+## Core Concepts
+- **Ingestor**: Data source adapters (Telegram, WhatsApp, etc.)
+- **Preprocessor**: Data transformation and formatting
+- **Embedder**: Text to vector conversion
+- **Vector Store**: Vector database storage
+- **Generator**: Text generation and responses
+- **Orchestrator**: Workflow coordination
+
+## Application Flow
+1. Ingestors collect data from external sources
+2. Preprocessors format and chunk the data
+3. Embedders convert text to vectors
+4. Vector Stores save the embedded data
+5. When a query is received, relevant context is retrieved
+6. Generators create a response using the context
+7. Response is returned to the user
+
+## Important Notes
+- Do not modify function interfaces unless specifically instructed
+- Always maintain the existing directory structure
+- Use the provided configuration file instead of creating new ones
+- All database files should be stored in the `db/` directory
+- All logs should be written to the `logs/` directory 

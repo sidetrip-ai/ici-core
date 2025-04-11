@@ -3,7 +3,7 @@ system:
   loggers:
     structured_logger:
       console_output: true
-      level: WARNING
+      level: INFO
       log_file: ./logs/structured_logger.log
       name: structured_logger
       source_token: $SOURCE_TOKEN
@@ -119,12 +119,12 @@ orchestrator:
           user_info_file: "db/telegram/user_info.json"
           
           # Chat and message limits
-          max_chats: 100            # Maximum number of chats to fetch (-1 for all available)
-          max_messages_per_chat: 200  # Maximum messages per chat (-1 for all available)
+          max_chats: -1            # Maximum number of chats to fetch (-1 for all available)
+          max_messages_per_chat: -1  # Maximum messages per chat (-1 for all available)
           ignored_chats: []         # List of chat IDs to exclude from fetching
           
           # Rate limiting and batching settings
-          batch_size: 50            # Number of messages to fetch in each request
+          batch_size: 500            # Number of messages to fetch in each request
           request_delay: 1.0        # Delay between batched requests in seconds
       preprocessor:
         chunk_size: 512

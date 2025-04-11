@@ -693,11 +693,15 @@ class TelegramIngestor(Ingestor):
                 # Extract the name based on entity type
                 name = None
                 is_group = False
+                is_deleted = False
                 
                 if hasattr(entity, 'title'):
                     # Channel or group
                     name = entity.title
                     is_group = True
+                elif hasattr(entity, 'deleted'):
+                    # Deleted channel or group
+                    is_deleted = entity.deleted
                 else:
                     # User or bot
                     first_name = getattr(entity, 'first_name', '')
@@ -707,12 +711,21 @@ class TelegramIngestor(Ingestor):
                     elif hasattr(entity, 'username'):
                         name = entity.username
                 
+                if is_deleted:
+                    self.logger.info({
+                        "action": "DELETED_ENTITY",
+                        "message": f"Ignoring deleted entity {entity.id}",
+                        "data": {"entity_id": entity.id}
+                    })
+                    continue
+                
+                
                 # Skip if we couldn't determine a name
                 if not name:
                     self.logger.warning({
                         "action": "UNNAMED_ENTITY",
                         "message": "Skipping entity with no name",
-                        "data": {"entity_id": entity.id if hasattr(entity, 'id') else "unknown"}
+                        "data": {"entity_id": entity.id if hasattr(entity, 'id') else "unknown", "attributes": list(entity.__dict__.keys())}
                     })
                     continue
                 

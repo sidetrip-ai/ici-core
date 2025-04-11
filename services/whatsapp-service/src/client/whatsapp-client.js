@@ -119,7 +119,9 @@ class WhatsAppClient {
 
     // Message event
     this.client.on('message', async (message) => {
-      eventEmitter.emit('whatsapp.message', message);
+      // Format the message with quoted details before emitting
+      const formattedMessage = await this._formatMessageWithQuotes(message);
+      eventEmitter.emit('whatsapp.message', formattedMessage);
     });
   }
 
@@ -210,7 +212,8 @@ class WhatsAppClient {
       // Fetch messages
       const messages = await chat.fetchMessages({ limit });
       
-      return messages.map(msg => this._formatMessage(msg));
+      // Use Promise.all to format all messages with quoted details in parallel
+      return await Promise.all(messages.map(msg => this._formatMessageWithQuotes(msg)));
     } catch (error) {
       console.error(`Error fetching messages for chat ${chatId}:`, error);
       throw error;
@@ -261,8 +264,11 @@ class WhatsAppClient {
           messages = await chat.fetchMessages({ limit: config.api.maxMessages });
         }
         
-        // Format and add messages
-        allMessages.push(...messages.map(msg => this._formatMessage(msg)));
+        // Format messages with quoted details and add to result
+        const formattedMessages = await Promise.all(
+          messages.map(msg => this._formatMessageWithQuotes(msg))
+        );
+        allMessages.push(...formattedMessages);
       }
       
       return {
@@ -314,7 +320,11 @@ class WhatsAppClient {
    * @returns {Object} Formatted message
    */
   _formatMessage(msg) {
-    return {
+    // Log message keys for debugging
+    console.log('WhatsApp Message Keys:', Object.keys(msg));
+    console.log('Message Type:', msg.type);
+    
+    const formattedMessage = {
       id: msg.id._serialized,
       body: msg.body,
       type: msg.type,
@@ -330,6 +340,69 @@ class WhatsAppClient {
       isStarred: msg.isStarred,
       broadcast: msg.broadcast
     };
+    
+    // Add quoted message details if available
+    if (msg.hasQuotedMsg) {
+      try {
+        // Get the quoted message if immediately available
+        if (msg._data && msg._data.quotedMsg) {
+          console.log('Quoted Message Keys:', Object.keys(msg._data.quotedMsg));
+          
+          formattedMessage.quotedMsgId = msg._data.quotedMsg.id._serialized;
+          formattedMessage.quotedMsg = {
+            body: msg._data.quotedMsg.body || '',
+            type: msg._data.quotedMsg.type,
+            timestamp: msg._data.quotedMsg.timestamp ? msg._data.quotedMsg.timestamp * 1000 : null,
+            sender: msg._data.quotedMsg.author || msg._data.quotedMsg.from
+          };
+        } 
+        // If not immediately available, add the reference IDs
+        else {
+          formattedMessage.quotedMsgId = msg._data.quotedStanzaID || null;
+          formattedMessage.quotedParticipant = msg._data.quotedParticipant || null;
+          formattedMessage.quotedRemoteJid = msg._data.quotedRemoteJid || null;
+        }
+      } catch (error) {
+        console.error('Error processing quoted message:', error);
+        // Still indicate that it's a reply even if we couldn't extract the details
+        formattedMessage.quotedMsgId = 'unknown';
+      }
+    }
+    
+    return formattedMessage;
+  }
+
+  /**
+   * Format a WhatsApp message with its full quoted message details
+   * This method should be used when fetching messages for ingestor
+   * @param {Object} msg WhatsApp message object
+   * @returns {Promise<Object>} Formatted message with quoted message details
+   */
+  async _formatMessageWithQuotes(msg) {
+    // Start with the basic formatted message
+    const formattedMessage = this._formatMessage(msg);
+    
+    // If this is a reply, try to fetch the quoted message
+    if (msg.hasQuotedMsg && !formattedMessage.quotedMsg) {
+      try {
+        const quotedMsg = await msg.getQuotedMessage();
+        if (quotedMsg) {
+          console.log('Fetched Quoted Message Keys:', Object.keys(quotedMsg));
+          
+          formattedMessage.quotedMsgId = quotedMsg.id._serialized;
+          formattedMessage.quotedMsg = {
+            body: quotedMsg.body || '',
+            type: quotedMsg.type,
+            timestamp: quotedMsg.timestamp ? quotedMsg.timestamp * 1000 : null,
+            sender: quotedMsg.author || quotedMsg.from
+          };
+        }
+      } catch (error) {
+        console.error('Error fetching quoted message details:', error);
+      }
+    }
+    
+    return formattedMessage;
   }
 }
 

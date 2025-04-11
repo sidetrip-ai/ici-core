@@ -17,6 +17,7 @@ from ici.core.interfaces.preprocessor import Preprocessor
 from ici.core.exceptions import PreprocessorError
 from ici.adapters.loggers import StructuredLogger
 from ici.utils.config import get_component_config
+from ici.utils.metadata_utils import sanitize_metadata_for_vector_store
 
 
 class TelegramPreprocessor(Preprocessor):
@@ -163,6 +164,7 @@ class TelegramPreprocessor(Preprocessor):
         Process a batch of Telegram messages into standardized documents.
         
         This method allows direct processing of message batches in async pipelines.
+        Each message will be processed into a separate document with its context.
         
         Args:
             messages: List of raw Telegram message dictionaries
@@ -190,32 +192,58 @@ class TelegramPreprocessor(Preprocessor):
                 "data": {"message_count": len(messages)}
             })
             
-            # Group messages by time windows
-            message_groups = self._group_messages_by_time(messages)
+            # Group messages by conversation
+            conversation_messages = {}
+            for message in messages:
+                conv_id = message.get("conversation_id")
+                if conv_id not in conversation_messages:
+                    conversation_messages[conv_id] = []
+                conversation_messages[conv_id].append(message)
+            
+            # Sort messages in each conversation by timestamp
+            for conv_id in conversation_messages:
+                conversation_messages[conv_id].sort(
+                    key=lambda m: m.get("timestamp", 0) 
+                    if isinstance(m.get("timestamp"), (int, float)) 
+                    else 0
+                )
             
             self.logger.info({
                 "action": "PREPROCESSOR_GROUPED",
-                "message": f"Grouped messages into {len(message_groups)} time windows",
-                "data": {"group_count": len(message_groups)}
+                "message": f"Grouped messages into {len(conversation_messages)} conversations",
+                "data": {"conversation_count": len(conversation_messages)}
             })
             
-            # Process each group into standardized documents
+            # Process each message with its context
             documents = []
-            for group in message_groups:
-                # Split large groups into chunks
-                chunks = self._create_chunks(group)
-                
-                for chunk in chunks:
-                    # Format conversation text
-                    conversation_text = self._format_conversation(chunk)
+            for conv_id, conv_messages in conversation_messages.items():
+                for i, current_message in enumerate(conv_messages):
+                    # Clearly separate the messages into primary, previous, and next
+                    primary_message = current_message
                     
-                    # Extract metadata
-                    metadata = self._create_metadata(chunk)
+                    # Get previous messages (up to 5)
+                    start_idx = max(0, i - 5)
+                    previous_messages = conv_messages[start_idx:i]
                     
-                    # Create standardized document with UUID-based ID
+                    # Get next messages (up to 5)
+                    end_idx = min(len(conv_messages), i + 6)  # +6 because end index is exclusive
+                    next_messages = conv_messages[i+1:end_idx]
+                    
+                    # Format the message text (only using the primary message)
+                    message_text = self._format_conversation([primary_message])
+                    
+                    # Create metadata with context
+                    # Pass all three components separately to make the structure clearer
+                    metadata = self._create_metadata_with_context(
+                        primary_message=primary_message,
+                        previous_messages=previous_messages,
+                        next_messages=next_messages
+                    )
+                    
+                    # Create document
                     document = {
-                        "id": str(uuid.uuid4()),
-                        "text": conversation_text,
+                        "id": str(primary_message.get("id", "")),
+                        "text": message_text,
                         "metadata": metadata
                     }
                     
@@ -452,220 +480,135 @@ class TelegramPreprocessor(Preprocessor):
     
     def _format_conversation(self, messages: List[Dict[str, Any]]) -> str:
         """
-        Format a group of messages as a conversation.
+        Format a message as raw text without additional formatting.
         
         Args:
-            messages: List of Telegram message dictionaries
+            messages: List of Telegram message dictionaries. We'll only use the current message.
             
         Returns:
-            str: Formatted conversation text
+            str: Raw message text
         """
         if not messages:
             return ""
-            
-        formatted_lines = []
         
-        for message in messages:
-            # Skip service messages
-            if message.get("action", {}).get("type") in ["chat_add_user", "chat_del_user", "phone_call"]:
-                continue
-            
-            # Extract basic message properties
-            sender_name = message.get("sender_name", "Unknown")
-            from_id = message.get("from_id", "")
-            text = message.get("text", "")
-            chat_name = message.get("conversation_name", "Unknown Chat")
-            chat_type = message.get("chat_type", "private")
-            
-            # Format timestamp
-            timestamp = ""
-            try:
-                if message.get("date"):
-                    dt = datetime.fromisoformat(message.get("date"))
-                    timestamp = dt.strftime("%Y-%m-%d %H:%M:%S")
-            except Exception:
-                timestamp = "Unknown time"
-            
-            # Check if this message is from the user themselves
-            is_me = self._my_user_id and str(from_id) == str(self._my_user_id)
-            
-            # Use "Me" as the display name if it's the user's message
-            display_name = "Me" if is_me else sender_name
-            
-            # Handle forwarded messages
-            if message.get("forwarded_from"):
-                forwarded_from = message.get("forwarded_from")
-                text = f"[Forwarded from {forwarded_from}] {text}"
-            
-            # Add media descriptions if present
-            media_info = ""
-            if message.get("media_type"):
-                media_type = message.get("media_type")
-                
-                if media_type == "sticker":
-                    emoji = message.get("sticker_emoji", "")
-                    media_info += f" [Sticker{': ' + emoji if emoji else ''}]"
-                    
-                elif media_type in ["photo", "video", "document", "audio", "voice"]:
-                    # Add file name if available
-                    file_name = message.get("file_name", "")
-                    if file_name:
-                        media_info += f" [File: {file_name}]"
-                    else:
-                        media_info += f" [{media_type.capitalize()}]"
-                
-                # Add caption if present
-                if message.get("caption"):
-                    media_info += f" Caption: {message.get('caption')}"
-            
-            # Special handling for replies
-            reply_info = ""
-            if message.get("reply_to_message_id"):
-                reply_id = message.get("reply_to_message_id")
-                
-                # Try to find the message being replied to
-                replied_to_message = None
-                for m in messages:
-                    if m.get("id") == reply_id:
-                        replied_to_message = m
-                        break
-                
-                # Add reply information if found
-                if replied_to_message:
-                    reply_sender = replied_to_message.get("sender_name", "Unknown")
-                    
-                    # Check if the replied message is from the user themselves
-                    reply_is_me = self._my_user_id and str(replied_to_message.get("from_id", "")) == str(self._my_user_id)
-                    reply_display_name = "Me" if reply_is_me else reply_sender
-                    
-                    reply_preview = replied_to_message.get("text", "")
-                    
-                    # Truncate long reply previews
-                    if len(reply_preview) > 30:
-                        reply_preview = reply_preview[:30] + "..."
-                    
-                    reply_info = f" [In reply to {reply_display_name}: \"{reply_preview}\"]"
-            
-            # Combine text with media and reply info
-            full_text = text + media_info + reply_info
-            
-            # Format in the specified structure
-            formatted_message = f"(author is {display_name}, datetime is {timestamp}, source is telegram, chatname is {chat_name} and chattype: {chat_type}) message is - {full_text}"
-            formatted_lines.append(formatted_message)
+        # Just return the raw text of the message
+        message = messages[0]  # Use the first message as the primary one
         
-        # Join all formatted lines into a single conversation text
-        return "\n\n".join(formatted_lines)
+        # Get the basic text
+        text = message.get("text", "")
+        
+        # Add media descriptions if present
+        if message.get("media_type"):
+            media_type = message.get("media_type")
+            
+            if media_type == "sticker":
+                emoji = message.get("sticker_emoji", "")
+                text += f" [Sticker{': ' + emoji if emoji else ''}]"
+                
+            elif media_type in ["photo", "video", "document", "audio", "voice"]:
+                # Add file name if available
+                file_name = message.get("file_name", "")
+                if file_name:
+                    text += f" [File: {file_name}]"
+                else:
+                    text += f" [{media_type.capitalize()}]"
+            
+            # Add caption if present
+            if message.get("caption"):
+                text += f" Caption: {message.get('caption')}"
+        
+        return text
     
-    def _create_metadata(self, messages: List[Dict[str, Any]]) -> Dict[str, Any]:
+    def _create_metadata_with_context(
+        self, 
+        primary_message: Dict[str, Any],
+        previous_messages: List[Dict[str, Any]],
+        next_messages: List[Dict[str, Any]]
+    ) -> Dict[str, Any]:
         """
-        Create rich metadata for a group of messages.
+        Create rich metadata for a message with clearly separated context.
         
         Args:
-            messages: List of messages in a chunk
+            primary_message: The main message being processed
+            previous_messages: List of messages that came before
+            next_messages: List of messages that came after
             
         Returns:
             Metadata dictionary
         """
-        if not messages:
+        if not primary_message:
             return {}
         
-        # Extract common data
-        first_message = messages[0]
-        last_message = messages[-1]
+        # Extract message data
+        message_id = primary_message.get("id")
         
         # Get chat info
-        conversation_id = first_message.get("conversation_id")
-        conversation_name = first_message.get("conversation_name")
-        is_group = first_message.get("is_group", False)
-        chat_type = first_message.get("chat_type", "private")
+        conversation_id = primary_message.get("conversation_id")
+        conversation_name = primary_message.get("conversation_name")
+        is_group = primary_message.get("is_group", False)
+        chat_type = primary_message.get("chat_type", "private")
         
-        # Get timestamps
+        # Get message timestamp
         try:
-            start_date = datetime.fromisoformat(first_message.get("date", ""))
-            end_date = datetime.fromisoformat(last_message.get("date", ""))
-            timestamp_start = int(start_date.timestamp())
-            timestamp_end = int(end_date.timestamp())
-            date_start = start_date.isoformat()
-            date_end = end_date.isoformat()
+            message_date = datetime.fromisoformat(primary_message.get("date", ""))
+            timestamp = int(message_date.timestamp())
+            date = message_date.isoformat()
         except:
-            # Fallback if dates are invalid
+            # Fallback if date is invalid
             now = datetime.now(timezone.utc)
-            timestamp_start = timestamp_end = int(now.timestamp())
-            date_start = date_end = now.isoformat()
+            timestamp = int(now.timestamp())
+            date = now.isoformat()
         
-        # Collect message IDs
-        message_ids = [msg.get("id") for msg in messages]
+        # Get sender info
+        sender_id = primary_message.get("sender_id", primary_message.get("from_id"))
+        sender_name = primary_message.get("sender_name", "Unknown")
         
-        # Collect unique senders
-        senders = set()
-        for msg in messages:
-            sender = msg.get("sender_name")
-            if not sender:
-                sender = msg.get("conversation_username") or msg.get("conversation_name")
-            if sender:
-                senders.add(sender)
+        # Determine if the message is from the user
+        is_me = self._my_user_id and str(sender_id) == str(self._my_user_id)
         
-        # Track message relationships
-        reply_count = sum(1 for msg in messages if msg.get("is_reply", False))
+        # Extract IDs from previous and next messages
+        previous_message_ids = [msg.get("id") for msg in previous_messages]
+        next_message_ids = [msg.get("id") for msg in next_messages]
+        
+        # Get reply information
+        reply_to_id = primary_message.get("reply_to_id")
+        reply_to_info = None
+        
+        if reply_to_id:
+            # Look for the message being replied to in previous and next messages
+            for msg in previous_messages + next_messages:
+                if msg.get("id") == reply_to_id:
+                    reply_to_info = {
+                        "id": msg.get("id"),
+                        "sender_name": msg.get("sender_name"),
+                        "text": msg.get("text", "")[:100] + ("..." if len(msg.get("text", "")) > 100 else "")
+                    }
+                    break
         
         # Create metadata
         metadata = {
+            "id": message_id,
             "source": "telegram",
             "source_id": "telegram_ingestor",
             "chat_id": conversation_id,
+            "conversation_id": conversation_id,  # Add for consistency with formats
             "chat_name": conversation_name,
             "is_group": is_group,
             "chat_type": chat_type,
-            "timestamp_start": timestamp_start,
-            "timestamp_end": timestamp_end,
-            "date_start": date_start,
-            "date_end": date_end,
-            "message_ids": message_ids,
-            "message_count": len(messages),
-            "is_chunked": len(messages) < self._max_messages_per_chunk,
-            "participants": list(senders),
-            "reply_count": reply_count,
-            "time_window_minutes": self._time_window_minutes
+            "timestamp": timestamp,
+            "date": date,
+            "sender_id": sender_id,
+            "sender_name": sender_name,
+            "is_me": is_me,
+            "previous_message_ids": previous_message_ids,
+            "next_message_ids": next_message_ids,
+            "neighboring_message_ids": previous_message_ids + next_message_ids,
+            "reply_to_id": reply_to_id,
+            "reply_to": reply_to_info
         }
         
         # Sanitize metadata to ensure it only contains types supported by ChromaDB
-        return self._sanitize_metadata(metadata)
-    
-    def _sanitize_metadata(self, metadata: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Sanitize metadata to ensure compatibility with vector stores.
-        
-        Converts lists and other complex types to string representations,
-        as ChromaDB only supports str, int, float, and bool metadata values.
-        
-        Args:
-            metadata: Original metadata dictionary
-            
-        Returns:
-            Dict[str, Any]: Sanitized metadata with only supported types
-        """
-        sanitized = {}
-        for key, value in metadata.items():
-            if isinstance(value, (str, int, float, bool)):
-                # Already supported types
-                sanitized[key] = value
-            elif isinstance(value, list):
-                # Convert lists to comma-separated strings
-                sanitized[key] = ",".join(str(item) for item in value)
-            elif isinstance(value, set):
-                # Convert sets to comma-separated strings
-                sanitized[key] = ",".join(str(item) for item in value)
-            elif isinstance(value, dict):
-                # Convert dictionaries to JSON strings
-                sanitized[key] = json.dumps(value)
-            elif value is None:
-                # Convert None to empty string
-                sanitized[key] = ""
-            else:
-                # Fallback for any other types
-                sanitized[key] = str(value)
-        
-        return sanitized
+        return sanitize_metadata_for_vector_store(metadata)
     
     def _get_safe_filename(self, chat_id: str) -> str:
         """
