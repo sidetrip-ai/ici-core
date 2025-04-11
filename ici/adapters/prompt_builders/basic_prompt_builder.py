@@ -7,6 +7,7 @@ that combines documents and user input to create prompts for language models.
 
 import os
 from typing import List, Dict, Any, Optional
+from datetime import datetime, timezone
 
 from ici.core.interfaces.prompt_builder import PromptBuilder
 from ici.core.exceptions import PromptBuilderError
@@ -171,71 +172,86 @@ class BasicPromptBuilder(PromptBuilder):
                 score = doc.get("score", None)
                 rrf_score = doc.get("rrf_score", None)
                 
-                # Add source annotation with relevance if available
-                score_info = ""
-                if score is not None:
-                    score_info = f" (Relevance: {score:.2f})"
-                
-                # Get creation time if available
-                timestamp = metadata.get("creation_time", metadata.get("timestamp", ""))
-                time_info = f" | {timestamp}" if timestamp else ""
-                
-                # Format source header
-                source_header = f"--- {source}{score_info}{time_info} ---"
-                
                 # Add to sources dict
                 if source not in sources:
                     sources[source] = []
                 
                 sources[source].append({
-                    "header": source_header,
                     "text": text,
+                    "metadata": metadata,
                     "score": score if score is not None else 0
                 })
             
-            # Build context from organized documents
+            # Build context with XML structure
             context_parts = []
             
-            # Include a summary of sources first
-            if len(sources) > 1:
-                source_list = ", ".join(sources.keys())
-                context_parts.append(f"Information from multiple sources: {source_list}\n")
+            # XML opening tag for relevant context
+            context_parts.append("<relevant_context>")
             
-            # Sort sources by highest scoring document within each source
-            sorted_sources = sorted(
-                sources.keys(),
-                key=lambda s: max([doc.get("score", 0) for doc in sources[s]]),
-                reverse=True
-            )
-            
-            # Add documents from each source, organized by source
-            for source in sorted_sources:
-                source_docs = sources[source]
+            # Process each source with its documents
+            for source_name, source_docs in sources.items():
+                # Sort documents by score (if available)
+                sorted_docs = sorted(source_docs, key=lambda x: x.get("score", 0), reverse=True)
                 
-                # Sort documents within source by score
-                source_docs = sorted(source_docs, key=lambda x: x.get("score", 0), reverse=True)
+                # Add source section with XML tags
+                context_parts.append(f"  <source name=\"{source_name}\">")
                 
-                # Add each document with its header
-                for doc in source_docs:
-                    context_parts.append(f"{doc['header']}\n{doc['text']}")
+                # Add each document with its metadata
+                for i, doc in enumerate(sorted_docs):
+                    doc_id = f"{source_name}_{i+1}"
+                    context_parts.append(f"    <document id=\"{doc_id}\">")
+                    
+                    # Format document content with author and timestamp
+                    metadata = doc.get("metadata", {})
+                    author = metadata.get("author", "Unknown")
+                    timestamp = metadata.get("timestamp", "")
+                    content = doc.get("text", "")
+                    
+                    # Create combined format: authorName [date and time]: content of primary message
+                    formatted_content = f"{author}"
+                    if timestamp:
+                        # Convert timestamp to ISO format with timezone if it's a numeric timestamp
+                        if timestamp and str(timestamp).isdigit():
+                            # Assuming timestamp is in milliseconds
+                            iso_timestamp = datetime.fromtimestamp(int(timestamp)/1000, tz=timezone.utc).isoformat()
+                            formatted_content += f" [{iso_timestamp}]"
+                        else:
+                            formatted_content += f" [{timestamp}]"
+                    formatted_content += f": {content}"
+                    
+                    # Add the formatted content
+                    context_parts.append(f"      <content>{formatted_content}</content>")
+                    
+                    # Skip adding separate metadata section since we're combining it with content
+                    # Only add metadata that isn't already included in the formatted content
+                    # remaining_metadata = {k: v for k, v in metadata.items() 
+                    #                      if k not in ["author", "timestamp", "source"]}
+                    
+                    # if remaining_metadata:
+                    #     metadata_str = []
+                    #     for key, value in remaining_metadata.items():
+                    #         metadata_str.append(f"{key}: {value}")
+                        
+                    #     if metadata_str:
+                    #         context_parts.append(f"      <metadata>{', '.join(metadata_str)}</metadata>")
+                    
+                    context_parts.append("    </document>")
+                
+                context_parts.append("  </source>")
             
-            # Combine context parts
-            context = "\n\n".join(context_parts)
+            # XML closing tag for relevant context
+            context_parts.append("</relevant_context>")
+            
+            # Join all context parts
+            context = "\n".join(context_parts)
             
             # Check for user references in the context
             found_terms = []
-            if self._user_reference_enabled and self._user_reference_terms and self._reference_patterns:
-                for pattern, term in zip(self._reference_patterns, self._user_reference_terms):
-                    if pattern.search(context):
+            if self._user_reference_enabled and self._user_reference_terms:
+                for term in self._user_reference_terms:
+                    # Only add terms that actually appear in the context
+                    if term.lower() in context.lower():
                         found_terms.append(term)
-            
-            # Check if we need to truncate
-            if max_context_length and len(context) > max_context_length:
-                self.logger.warning({
-                    "action": "PROMPT_BUILDER_TRUNCATE",
-                    "message": f"Truncating context from {len(context)} to {max_context_length} characters"
-                })
-                context = context[:max_context_length] + "...[truncated due to length]"
             
             # Build the prompt using the template
             prompt = self._template.format(context=context, question=input)

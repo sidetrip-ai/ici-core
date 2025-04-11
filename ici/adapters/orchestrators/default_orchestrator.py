@@ -544,6 +544,36 @@ class DefaultOrchestrator(Orchestrator):
             self._active_chats[user_id] = temp_chat_id
             return temp_chat_id
     
+    def _format_chat_history(self, messages: List[Dict[str, Any]]) -> str:
+        """
+        Formats chat history messages into a structured XML format.
+        
+        Args:
+            messages: List of chat messages
+            
+        Returns:
+            str: Formatted chat history with XML tags
+        """
+        if not messages:
+            return ""
+        
+        formatted_parts = []
+        formatted_parts.append("<conversation_history>")
+        
+        for msg in messages:
+            role = msg.get("role", "").lower()
+            content = msg.get("content", "")
+            
+            if role == "system":
+                # Skip system messages in the context
+                continue
+                
+            formatted_parts.append(f"  <{role}>{content}</{role}>")
+        
+        formatted_parts.append("</conversation_history>")
+        
+        return "\n".join(formatted_parts)
+    
     async def _build_chat_prompt(
         self, 
         query: str, 
@@ -551,7 +581,7 @@ class DefaultOrchestrator(Orchestrator):
         chat_messages: List[Dict[str, Any]]
     ) -> str:
         """
-        Builds a prompt that includes chat history context.
+        Builds a structured prompt that includes chat history and source-specific context.
         
         Args:
             query: The user query
@@ -565,37 +595,64 @@ class DefaultOrchestrator(Orchestrator):
             PromptBuilderError: If prompt building fails
         """
         try:
-            # Format chat history as context
+            # Format chat history with XML tags
             chat_context = self._format_chat_history(chat_messages)
             
-            # Add document context
-            doc_context = self._format_documents(documents)
+            # If we're just showing documents directly, use the standard prompt builder
+            if not chat_context:
+                return await self._prompt_builder.build_prompt(query, documents)
             
-            # Combine contexts
-            combined_context = ""
-            if chat_context and doc_context:
-                combined_context = f"Chat history:\n{chat_context}\n\nRelevant information:\n{doc_context}"
-            elif chat_context:
-                combined_context = f"Chat history:\n{chat_context}"
-            elif doc_context:
-                combined_context = f"Relevant information:\n{doc_context}"
+            # Create the main prompt section with structured XML
+            main_prompt = ""
             
-            # Build the prompt using the prompt builder
-            # For backward compatibility, we'll use the existing prompt builder's template
-            # but replace the context with our combined context
-            prompt = await self._prompt_builder.build_prompt(query, [{"text": combined_context}])
+            # First add the overall <prompt> tag
+            main_prompt = "<prompt>\n"
+            
+            # Add the query
+            main_prompt += f"  <query>{query}</query>\n\n"
+            
+            # Add the conversation history section
+            if chat_context:
+                main_prompt += f"{chat_context}\n\n"
+                
+            # Let the prompt builder handle the document organization and add to main prompt
+            # We create a temporary document that contains just the query for the prompt builder
+            prompt_with_docs = await self._prompt_builder.build_prompt(query, documents)
+            
+            # Extract just the context part from the prompt builder result
+            # This is a bit hacky but allows us to reuse the document organization logic
+            context_start = prompt_with_docs.find("<relevant_context>")
+            context_end = prompt_with_docs.find("</relevant_context>")
+            
+            if context_start >= 0 and context_end >= 0:
+                context_part = prompt_with_docs[context_start:context_end + len("</relevant_context>")]
+                main_prompt += context_part
+            else:
+                # Fallback if we can't find the XML tags
+                main_prompt += "  <relevant_context>\n"
+                main_prompt += "    <source name=\"general\">\n"
+                for i, doc in enumerate(documents):
+                    text = doc.get("text", "") or doc.get("content", "")
+                    main_prompt += f"      <document id=\"doc_{i+1}\">\n"
+                    main_prompt += f"        <content>{text}</content>\n"
+                    main_prompt += "      </document>\n"
+                main_prompt += "    </source>\n"
+                main_prompt += "  </relevant_context>\n"
+            
+            # Close the main prompt tag
+            main_prompt += "</prompt>"
             
             self.logger.debug({
                 "action": "ORCHESTRATOR_PROMPT_BUILT",
-                "message": "Chat prompt built successfully",
+                "message": "Chat prompt built successfully with XML structure",
                 "data": {
                     "documents_count": len(documents),
                     "messages_count": len(chat_messages),
-                    "prompt_length": len(prompt)
+                    "prompt_length": len(main_prompt)
                 }
             })
             
-            return prompt
+            return main_prompt
             
         except Exception as e:
             self.logger.error({
@@ -606,56 +663,6 @@ class DefaultOrchestrator(Orchestrator):
             
             # Return a simple prompt without context if prompt building fails
             return f"Answer the following question based on your general knowledge: {query}"
-    
-    def _format_chat_history(self, messages: List[Dict[str, Any]]) -> str:
-        """
-        Formats chat history messages into a string for the prompt.
-        
-        Args:
-            messages: List of chat messages
-            
-        Returns:
-            str: Formatted chat history
-        """
-        if not messages:
-            return ""
-        
-        formatted_messages = []
-        
-        for msg in messages:
-            role = msg.get("role", "").upper()
-            content = msg.get("content", "")
-            
-            if role == "SYSTEM":
-                # Skip system messages in the context
-                continue
-                
-            formatted_messages.append(f"{role}: {content}")
-        
-        return "\n\n".join(formatted_messages)
-    
-    def _format_documents(self, documents: List[Dict[str, Any]]) -> str:
-        """
-        Formats retrieved documents into a string for the prompt.
-        
-        Args:
-            documents: List of documents
-            
-        Returns:
-            str: Formatted documents
-        """
-        if not documents:
-            return ""
-        
-        doc_texts = []
-        
-        for doc in documents:
-            if "text" in doc:
-                doc_texts.append(doc["text"])
-            elif "content" in doc:
-                doc_texts.append(doc["content"])
-        
-        return "\n\n".join(doc_texts)
     
     async def _handle_new_chat_command(self, user_id: str, query: str) -> str:
         """
