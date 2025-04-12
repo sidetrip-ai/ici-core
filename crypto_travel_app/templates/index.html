@@ -9,6 +9,503 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;700&family=Space+Grotesk:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        /* Voice input styles */
+        .input-with-mic {
+            position: relative;
+            display: flex;
+            align-items: flex-start;
+        }
+        
+        .mic-btn {
+            background: #3d85c6;
+            border: none;
+            color: white;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            margin-left: 10px;
+            transition: all 0.2s;
+            align-self: center;
+        }
+        
+        .mic-btn:hover {
+            background: #2a5a88;
+            transform: scale(1.05);
+        }
+        
+        .mic-btn.recording {
+            background: #e74c3c;
+            animation: pulse 1.5s infinite;
+        }
+        
+        .recording-indicator {
+            display: flex;
+            align-items: center;
+            margin-top: 8px;
+            color: #e74c3c;
+            font-size: 14px;
+            font-weight: 500;
+        }
+        
+        /* Audio waves visualization */
+        .audio-waves {
+            display: flex;
+            align-items: center;
+            height: 30px;
+            margin-right: 10px;
+        }
+        
+        .wave {
+            width: 3px;
+            height: 15px;
+            margin: 0 2px;
+            background-color: #e74c3c;
+            border-radius: 1px;
+            animation: wave 0.5s infinite ease-in-out alternate;
+        }
+        
+        .wave1 { animation-delay: -0.4s; }
+        .wave2 { animation-delay: -0.3s; }
+        .wave3 { animation-delay: -0.2s; }
+        .wave4 { animation-delay: -0.1s; }
+        .wave5 { animation-delay: 0s; }
+        
+        @keyframes wave {
+            0% { height: 5px; }
+            50% { height: 15px; }
+            100% { height: 25px; }
+        }
+        
+        /* Tagline styles */
+        .tagline {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 16px;
+            font-weight: 500;
+            letter-spacing: 0.5px;
+            color: #fff;
+            position: relative;
+            padding-bottom: 3px;
+            background: linear-gradient(90deg, #5ecbff, #6c3ce9);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            color: transparent;
+        }
+        
+        .tagline::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 1px;
+            background: linear-gradient(90deg, #5ecbff, transparent);
+        }
+        
+        /* Data tabs styles */
+        .data-tabs {
+            display: flex;
+            border-bottom: 1px solid #333;
+            margin-bottom: 10px;
+        }
+        
+        .tab-btn {
+            background: none;
+            border: none;
+            padding: 10px 15px;
+            color: #999;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 14px;
+            border-bottom: 3px solid transparent;
+        }
+        
+        .tab-btn:hover {
+            color: white;
+        }
+        
+        .tab-btn.active {
+            color: #3d85c6;
+            border-bottom: 3px solid #3d85c6;
+        }
+        
+        .tab-content {
+            display: none;
+            height: 100%;
+            overflow-y: auto;
+        }
+        
+        .tab-content.active {
+            display: block;
+        }
+        
+        .email-container {
+            height: 100%;
+        }
+        
+        .email-message {
+            background-color: #1f1f1f;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            padding: 12px;
+            font-family: 'Space Grotesk', sans-serif;
+        }
+        
+        .email-header {
+            display: flex;
+            justify-content: space-between;
+            border-bottom: 1px solid #333;
+            padding-bottom: 8px;
+            margin-bottom: 10px;
+        }
+        
+        .email-subject {
+            font-weight: 600;
+            font-size: 16px;
+            color: white;
+        }
+        
+        .email-date {
+            color: #999;
+            font-size: 12px;
+        }
+        
+        .email-from {
+            color: #3d85c6;
+            font-size: 14px;
+            margin-bottom: 8px;
+        }
+        
+        .email-content {
+            white-space: pre-line;
+            line-height: 1.5;
+            color: #ddd;
+        }
+        
+        /* Web3/Crypto Enhanced travel itinerary styles */
+        .results-container {
+            background-color: #0f1623;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 8px 32px rgba(31, 38, 135, 0.3);
+            border: 1px solid rgba(73, 93, 184, 0.3);
+            backdrop-filter: blur(4px);
+            position: relative;
+        }
+        
+        .results-container::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: linear-gradient(90deg, #3d85c6, #6c3ce9, #3d85c6);
+            background-size: 200% 100%;
+            animation: gradientMove 6s linear infinite;
+        }
+        
+        @keyframes gradientMove {
+            0% { background-position: 0% 0; }
+            100% { background-position: 200% 0; }
+        }
+        
+        .results-header {
+            background: linear-gradient(135deg, #2a5298, #3d85c6);
+            padding: 15px 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .results-header h3 {
+            color: white;
+            margin: 0;
+            font-weight: 600;
+            font-family: 'Space Grotesk', sans-serif;
+            letter-spacing: 0.5px;
+            display: flex;
+            align-items: center;
+        }
+        
+        .results-header h3 i {
+            margin-right: 8px;
+            background: rgba(255, 255, 255, 0.2);
+            padding: 6px;
+            border-radius: 8px;
+        }
+        
+        .results-content {
+            padding: 0;
+            position: relative;
+        }
+        
+        .icon-btn {
+            background-color: rgba(255, 255, 255, 0.1);
+            border: none;
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            transition: all 0.2s;
+        }
+        
+        .icon-btn:hover {
+            background-color: rgba(255, 255, 255, 0.2);
+            transform: translateY(-2px);
+        }
+        
+        /* Web3/Crypto Itinerary specific styles */
+        .itinerary-section {
+            padding: 25px;
+            border-bottom: 1px solid rgba(73, 93, 184, 0.2);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .itinerary-section:last-child {
+            border-bottom: none;
+        }
+        
+        .itinerary-section::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            right: 0;
+            width: 100px;
+            height: 100px;
+            background: radial-gradient(circle at bottom right, rgba(61, 133, 198, 0.1), transparent 70%);
+            z-index: 0;
+            pointer-events: none;
+        }
+        
+        .itinerary-section h1 {
+            color: white;
+            margin-top: 0;
+            font-family: 'Space Grotesk', sans-serif;
+            font-weight: 700;
+            font-size: 28px;
+            background: linear-gradient(90deg, #3d85c6, #6c3ce9);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            color: transparent;
+            display: inline-block;
+        }
+        
+        .itinerary-section h2 {
+            color: white;
+            margin-top: 0;
+            font-family: 'Space Grotesk', sans-serif;
+            font-weight: 600;
+            font-size: 24px;
+            background: linear-gradient(90deg, #3d85c6, #5cb6e9);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            color: transparent;
+            display: inline-block;
+        }
+        
+        .itinerary-section h3 {
+            color: white;
+            font-family: 'Space Grotesk', sans-serif;
+            font-weight: 500;
+            padding-bottom: 8px;
+            margin-top: 25px;
+            position: relative;
+            display: inline-block;
+        }
+        
+        .itinerary-section h3::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 2px;
+            background: linear-gradient(90deg, #3d85c6, transparent);
+        }
+        
+        .itinerary-section h4 {
+            color: #5ecbff;
+            margin-bottom: 8px;
+            font-weight: 600;
+        }
+        
+        .itinerary-section ul {
+            list-style-type: none;
+            padding-left: 10px;
+        }
+        
+        .itinerary-section ul li {
+            position: relative;
+            padding-left: 28px;
+            margin-bottom: 12px;
+            line-height: 1.5;
+        }
+        
+        .itinerary-section ul li:before {
+            content: '⬢';
+            position: absolute;
+            left: 0;
+            color: #3d85c6;
+            font-weight: bold;
+            font-size: 12px;
+        }
+        
+        .day-plan {
+            background-color: rgba(30, 41, 59, 0.5);
+            border-radius: 12px;
+            padding: 18px;
+            margin-bottom: 20px;
+            border-left: none;
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+            backdrop-filter: blur(4px);
+            border: 1px solid rgba(73, 93, 184, 0.2);
+        }
+        
+        .day-plan::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 4px;
+            background: linear-gradient(180deg, #3d85c6, #6c3ce9);
+        }
+        
+        .day-plan h4 {
+            margin-top: 0;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            font-size: 14px;
+        }
+        
+        .day-plan p {
+            margin-bottom: 10px;
+            color: rgba(255, 255, 255, 0.9);
+        }
+        
+        .hotel-card,
+        .restaurant-card,
+        .attraction-card {
+            background-color: rgba(30, 41, 59, 0.5);
+            border-radius: 12px;
+            padding: 18px;
+            margin-bottom: 20px;
+            display: flex;
+            flex-direction: column;
+            border: 1px solid rgba(73, 93, 184, 0.2);
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            backdrop-filter: blur(4px);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .hotel-card:hover,
+        .restaurant-card:hover,
+        .attraction-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+        }
+        
+        .hotel-card::before,
+        .restaurant-card::before,
+        .attraction-card::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 4px;
+        }
+        
+        .hotel-card::before {
+            background: linear-gradient(180deg, #3d85c6, #5cb6e9); /* Blue gradient */
+        }
+        
+        .restaurant-card::before {
+            background: linear-gradient(180deg, #e94c61, #fd7a50); /* Red gradient */
+        }
+        
+        .attraction-card::before {
+            background: linear-gradient(180deg, #2cb978, #5cb6e9); /* Green gradient */
+        }
+        
+        .hotel-card::after,
+        .restaurant-card::after,
+        .attraction-card::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 40px;
+            height: 40px;
+            opacity: 0.05;
+            background-position: center;
+            background-repeat: no-repeat;
+            background-size: contain;
+        }
+        
+        .hotel-card::after {
+            background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="white" d="M19 3h-4.18C14.4 1.84 13.3 1 12 1s-2.4.84-2.82 2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 0c.55 0 1 .45 1 1s-.45 1-1 1-1-.45-1-1 .45-1 1-1zm2 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/></svg>');
+        }
+        
+        .restaurant-card::after {
+            background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="white" d="M11 9H9V2H7v7H5V2H3v7c0 2.12 1.66 3.84 3.75 3.97V22h2.5v-9.03C11.34 12.84 13 11.12 13 9V2h-2v7zm5-3v8h2.5v8H21V2c-2.76 0-5 2.24-5 4z"/></svg>');
+        }
+        
+        .attraction-card::after {
+            background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="white" d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>');
+        }
+        
+        .highlight-text {
+            color: #5ecbff;
+            font-weight: 600;
+        }
+        
+        .price-tag {
+            background: linear-gradient(135deg, #3d85c6, #5cb6e9);
+            color: white;
+            padding: 5px 10px;
+            border-radius: 6px;
+            font-size: 0.85em;
+            display: inline-block;
+            margin-left: 8px;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+        }
+        
+        @keyframes pulse {
+            0% {
+                opacity: 1;
+                transform: scale(1);
+            }
+            50% {
+                opacity: 0.5;
+                transform: scale(1.1);
+            }
+            100% {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+    </style>
 </head>
 <body>
     <div class="container">
@@ -17,34 +514,46 @@
                 <span class="logo-icon">✈️</span>
                 <span class="logo-text">Side<span class="accent">Trip</span></span>
             </div>
-            <div class="nav-links">
-                <a href="#" class="active"><i class="fas fa-home"></i> Home</a>
-                <a href="#"><i class="fas fa-calendar-alt"></i> Events</a>
-                <a href="#"><i class="fas fa-globe"></i> Destinations</a>
+            <div class="tagline">
+                Planning Your Side Trip
             </div>
             <div class="nav-profile">
-                <div class="profile-pic">P</div>
-                <span>Prakhar</span>
+                <div class="profile-pic">
+                    <i class="fas fa-user"></i>
+                </div>
             </div>
         </nav>
 
         <div class="main">
             <div class="chat-panel">
                 <div class="panel-header">
-                    <h2><i class="fas fa-comments"></i> Telegram Chat</h2>
+                    <h2><i class="fas fa-database"></i> Data Sources</h2>
                     <div class="toggle-chat">
-                        <span>Show Chat</span>
+                        <span>Show Data</span>
                         <label class="switch">
-                            <input type="checkbox" id="chatToggle" checked>
+                            <input type="checkbox" id="dataToggle" checked>
                             <span class="slider round"></span>
                         </label>
                     </div>
                 </div>
-                <div class="chat-container" id="chatContainer">
-                    <!-- Chat messages will be loaded dynamically -->
-                    <div class="loading-chat">
-                        <div class="spinner"></div>
-                        <p>Loading conversation...</p>
+                <div class="data-tabs">
+                    <button class="tab-btn active" id="chatTab"><i class="fas fa-comments"></i> Telegram Chat</button>
+                    <button class="tab-btn" id="emailTab"><i class="fas fa-envelope"></i> Email History</button>
+                </div>
+                <div class="data-container" id="dataContainer">
+                    <div class="chat-container tab-content active" id="chatContainer">
+                        <!-- Chat messages will be loaded dynamically -->
+                        <div class="loading-chat">
+                            <div class="spinner"></div>
+                            <p>Loading conversation...</p>
+                        </div>
+                    </div>
+                    <div class="email-container tab-content" id="emailContainer">
+                        <!-- Email data will be loaded dynamically -->
+                        <div class="loading-email">
+                            <div class="spinner"></div>
+                            <p>Loading emails...</p>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -56,7 +565,22 @@
                 <div class="travel-form">
                     <div class="form-group">
                         <label for="userPrompt">Enter your travel request:</label>
-                        <textarea id="userPrompt" rows="3" placeholder="Enter your travel request here..."></textarea>
+                        <div class="input-with-mic">
+                            <textarea id="userPrompt" rows="3" placeholder="Enter your travel request here..."></textarea>
+                            <button id="micBtn" class="mic-btn" title="Speak your travel request">
+                                <i class="fas fa-microphone"></i>
+                            </button>
+                        </div>
+                        <div class="recording-indicator" id="recordingIndicator" style="display: none;">
+                            <div class="audio-waves">
+                                <div class="wave wave1"></div>
+                                <div class="wave wave2"></div>
+                                <div class="wave wave3"></div>
+                                <div class="wave wave4"></div>
+                                <div class="wave wave5"></div>
+                            </div>
+                            <span>Recording... Click to stop</span>
+                        </div>
                     </div>
                     <button id="generateBtn" class="generate-btn">
                         <span class="btn-text">Generate Travel Plan</span>
@@ -72,9 +596,9 @@
                             <div class="terminal-title">side_trip</div>
                         </div>
                         <div class="terminal-body">
-                            <div class="terminal-line">$ Analyzing conversation data...</div>
-                            <div class="terminal-line">$ Extracting travel preferences...</div>
-                            <div class="terminal-line blink">$ Generating personalized travel plan...</div>
+                            <div class="terminal-line">$ Extracting travel vibe from email...</div>
+                            <div class="terminal-line">$ Extracting travel vibe from Telegram...</div>
+                            <div class="terminal-line blink">$ Generating plan...</div>
                         </div>
                     </div>
                 </div>

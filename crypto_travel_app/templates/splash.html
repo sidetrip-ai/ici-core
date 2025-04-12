@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Side Trip - Planning Your Next Side Trip</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #0e1117;
+            --accent-color: #3d85c6;
+            --text-color: #e6e6e6;
+            --gradient-start: #3d85c6;
+            --gradient-end: #6c3ce9;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Space Grotesk', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+            position: relative;
+        }
+        
+        body::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: 
+                radial-gradient(circle at 20% 35%, rgba(61, 133, 198, 0.15), transparent 25%),
+                radial-gradient(circle at 75% 44%, rgba(108, 60, 233, 0.1), transparent 30%);
+            z-index: -1;
+        }
+        
+        .splash-container {
+            text-align: center;
+            max-width: 90%;
+            width: 800px;
+            padding: 3rem;
+            background: rgba(14, 17, 23, 0.8);
+            border-radius: 20px;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 20px 80px rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(61, 133, 198, 0.2);
+            position: relative;
+            z-index: 1;
+            animation: fadeIn 1s ease-out;
+        }
+        
+        .splash-container::before {
+            content: '';
+            position: absolute;
+            top: -2px;
+            left: -2px;
+            right: -2px;
+            bottom: -2px;
+            background: linear-gradient(45deg, var(--gradient-start), var(--gradient-end), var(--gradient-start));
+            border-radius: 22px;
+            z-index: -1;
+            filter: blur(8px);
+            opacity: 0.5;
+            animation: borderGlow 6s infinite linear;
+        }
+        
+        .logo {
+            margin-bottom: 2rem;
+            position: relative;
+            display: inline-block;
+        }
+        
+        .logo-icon {
+            font-size: 5rem;
+            margin-bottom: 1rem;
+            display: inline-block;
+            background: linear-gradient(135deg, var(--gradient-start), var(--gradient-end));
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            color: transparent;
+            filter: drop-shadow(0 5px 15px rgba(61, 133, 198, 0.4));
+        }
+        
+        .logo-text {
+            font-size: 4rem;
+            font-weight: 700;
+            letter-spacing: 1px;
+            background: linear-gradient(135deg, var(--gradient-start), var(--gradient-end));
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            color: transparent;
+            margin-bottom: 1rem;
+            display: block;
+        }
+        
+        .tagline {
+            font-size: 1.4rem;
+            font-weight: 400;
+            margin-bottom: 3rem;
+            color: rgba(255, 255, 255, 0.8);
+            line-height: 1.6;
+        }
+        
+        .highlight {
+            color: #5ecbff;
+            font-weight: 500;
+        }
+        
+        .data-sources {
+            display: flex;
+            justify-content: center;
+            gap: 2rem;
+            margin-bottom: 3rem;
+        }
+        
+        .data-source {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.75rem 1.5rem;
+            background: rgba(61, 133, 198, 0.1);
+            border-radius: 50px;
+            border: 1px solid rgba(61, 133, 198, 0.2);
+        }
+        
+        .data-source i {
+            color: var(--accent-color);
+        }
+        
+        .cta-button {
+            padding: 1rem 2.5rem;
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 1.1rem;
+            font-weight: 600;
+            background: linear-gradient(135deg, var(--gradient-start), var(--gradient-end));
+            color: white;
+            border: none;
+            border-radius: 50px;
+            cursor: pointer;
+            transition: all 0.3s;
+            box-shadow: 0 5px 15px rgba(61, 133, 198, 0.3);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .cta-button::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+            transition: 0.5s;
+        }
+        
+        .cta-button:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 25px rgba(61, 133, 198, 0.5);
+        }
+        
+        .cta-button:hover::before {
+            left: 100%;
+        }
+        
+        .coming-soon {
+            margin-top: 2rem;
+            font-size: 0.9rem;
+            color: rgba(255, 255, 255, 0.5);
+            font-style: italic;
+        }
+        
+        .particles {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -2;
+        }
+        
+        .particle {
+            position: absolute;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--gradient-start), var(--gradient-end));
+            opacity: 0.3;
+            animation: float 20s infinite ease-in-out;
+        }
+        
+        @keyframes fadeIn {
+            0% { 
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            100% { 
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        @keyframes float {
+            0%, 100% {
+                transform: translate(0, 0);
+            }
+            25% {
+                transform: translate(-10px, 10px);
+            }
+            50% {
+                transform: translate(10px, 20px);
+            }
+            75% {
+                transform: translate(20px, -10px);
+            }
+        }
+        
+        @keyframes borderGlow {
+            0%, 100% {
+                opacity: 0.5;
+            }
+            50% {
+                opacity: 0.8;
+            }
+        }
+        
+        /* Audio control styles */
+        .audio-controls {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 100;
+        }
+        
+        .audio-btn {
+            background: rgba(61, 133, 198, 0.2);
+            color: var(--accent-color);
+            border: 1px solid rgba(61, 133, 198, 0.3);
+            border-radius: 50px;
+            padding: 8px 16px;
+            cursor: pointer;
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            backdrop-filter: blur(5px);
+            transition: all 0.3s;
+        }
+        
+        .audio-btn:hover {
+            background: rgba(61, 133, 198, 0.3);
+            transform: scale(1.05);
+        }
+        
+        audio {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <!-- Audio element for welcome message -->
+    <audio id="welcomeAudio" preload="auto" controls>
+        <source src="{{ url_for('static', filename='audio/welcome.mp3') }}" type="audio/mpeg">
+        Your browser does not support the audio element.
+    </audio>
+    
+    <div class="audio-controls">
+        <button id="playAudioBtn" class="audio-btn">
+            <i class="fas fa-volume-up"></i> Play Audio
+        </button>
+    </div>
+    
+    <div class="particles" id="particles"></div>
+    
+    <div class="splash-container">
+        <div class="logo">
+            <div class="logo-icon">✈️</div>
+            <div class="logo-text">Side Trip</div>
+        </div>
+        
+        <p class="tagline">
+            Planning your actual trip with Side Trip using your <span class="highlight">Telegram</span> and <span class="highlight">Email</span> data
+            <br><span class="coming-soon">(more to come soon)</span>
+        </p>
+        
+        <div class="data-sources">
+            <div class="data-source">
+                <i class="fab fa-telegram"></i>
+                <span>Telegram Data</span>
+            </div>
+            <div class="data-source">
+                <i class="fas fa-envelope"></i>
+                <span>Email History</span>
+            </div>
+        </div>
+        
+        <a href="/app">
+            <button class="cta-button">Get Started</button>
+        </a>
+    </div>
+    
+    <script>
+        // Create animated background particles and handle audio
+        document.addEventListener('DOMContentLoaded', function() {
+            const particlesContainer = document.getElementById('particles');
+            const particleCount = 15;
+            
+            for (let i = 0; i < particleCount; i++) {
+                const particle = document.createElement('div');
+                particle.classList.add('particle');
+                
+                // Random position
+                const left = Math.random() * 100;
+                const top = Math.random() * 100;
+                
+                // Random size
+                const size = Math.random() * 80 + 20;
+                
+                // Random animation delay
+                const delay = Math.random() * 10;
+                
+                particle.style.left = `${left}%`;
+                particle.style.top = `${top}%`;
+                particle.style.width = `${size}px`;
+                particle.style.height = `${size}px`;
+                particle.style.animationDelay = `${delay}s`;
+                
+                particlesContainer.appendChild(particle);
+            }
+            
+            // Handle audio playback
+            const welcomeAudio = document.getElementById('welcomeAudio');
+            const playAudioBtn = document.getElementById('playAudioBtn');
+            
+            // Try to autoplay
+            welcomeAudio.play().catch(error => {
+                console.log('Autoplay prevented:', error);
+                // Autoplay was prevented, show the button
+                playAudioBtn.style.display = 'flex';
+            });
+            
+            // Set up manual play button
+            playAudioBtn.addEventListener('click', () => {
+                welcomeAudio.play();
+                playAudioBtn.style.display = 'none';
+            });
+            
+            // Hide play button if audio is playing
+            welcomeAudio.addEventListener('playing', () => {
+                playAudioBtn.style.display = 'none';
+            });
+            
+            // Show play button when audio ends
+            welcomeAudio.addEventListener('ended', () => {
+                playAudioBtn.style.display = 'flex';
+                playAudioBtn.innerHTML = '<i class="fas fa-redo"></i> Play Again';
+            });
+        });
+    </script>
+</body>
+</html>
