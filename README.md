@@ -34,7 +34,7 @@ Note: If you face any issue while installing, check out [troubleshoot](./trouble
 
 ### Upgrade Python Version on MacOS (Only if your version is less than 3.10)
 
-This repository requires Python 3.10 or higher. By default, MacOS comes with Python 3.9 pre-installed. To upgrade to Python 3.12 or any version 3.10 or later and ensure it’s set in your PATH, follow these step-by-step instructions. We’ll use **Homebrew**, a popular package manager for MacOS, to install and manage Python.
+This repository requires Python 3.10 or higher. By default, MacOS comes with Python 3.9 pre-installed. To upgrade to Python 3.12 or any version 3.10 or later and ensure it's set in your PATH, follow these step-by-step instructions. We'll use **Homebrew**, a popular package manager for MacOS, to install and manage Python.
 
 ### Check your python version
 ```
@@ -45,7 +45,7 @@ If the output is 3.10 or greater, than you can move on to [Setup section](#insta
 
 #### Step 1: Install Homebrew (if not already installed)
 
-Homebrew simplifies the installation of software like Python on MacOS. If you don’t have it installed yet, follow these steps:
+Homebrew simplifies the installation of software like Python on MacOS. If you don't have it installed yet, follow these steps:
 
 1. Open **Terminal**.
 2. Run the following command to install Homebrew:
@@ -54,7 +54,7 @@ Homebrew simplifies the installation of software like Python on MacOS. If you do
    /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
    ```
 
-3. Follow the on-screen instructions to complete the installation. The script may prompt you to install Xcode Command Line Tools if they’re not already present—just follow the prompts to do so.
+3. Follow the on-screen instructions to complete the installation. The script may prompt you to install Xcode Command Line Tools if they're not already present—just follow the prompts to do so.
 
    - **Note**: After installation, Homebrew might display instructions to add it to your PATH. For example, on Apple Silicon Macs, you may need to run:
      ```bash
@@ -72,8 +72,8 @@ Once Homebrew is installed, you can use it to install a newer version of Python:
    brew install python
    ```
 
-   - This installs the latest stable Python version (e.g., 3.11 or 3.12, depending on Homebrew’s current formula), which will be 3.10 or higher.
-   - **Optional**: If you specifically need Python 3.12 and it’s available, you can try `brew install python@3.12`. Check available versions with `brew search python` if needed.
+   - This installs the latest stable Python version (e.g., 3.11 or 3.12, depending on Homebrew's current formula), which will be 3.10 or higher.
+   - **Optional**: If you specifically need Python 3.12 and it's available, you can try `brew install python@3.12`. Check available versions with `brew search python` if needed.
 
 2. Homebrew will install Python and create symlinks in `/usr/local/bin` (Intel Macs) or `/opt/homebrew/bin` (Apple Silicon Macs), typically making it the default `python3` when you run it.
 
@@ -100,7 +100,7 @@ After installation, confirm that the correct Python version is set up:
      echo $PATH
      ```
      - Ensure `/usr/local/bin` (Intel) or `/opt/homebrew/bin` (Apple Silicon) appears **before** `/usr/bin`.
-   - If it doesn’t, add the appropriate line to your shell configuration file (e.g., `~/.zshrc` for zsh, which is default on macOS Catalina and later, or `~/.bash_profile` for bash):
+   - If it doesn't, add the appropriate line to your shell configuration file (e.g., `~/.zshrc` for zsh, which is default on macOS Catalina and later, or `~/.bash_profile` for bash):
      - For Intel Macs:
        ```bash
        export PATH="/usr/local/bin:$PATH"
@@ -242,6 +242,11 @@ After installation, you need to configure your environment variables in the `.en
 2. **Generator API Key** (needed for AI model access):
    - `GENERATOR_API_KEY`: Your OpenAI or Anthropic API key
 
+3. **Google Workspace Credentials** (needed for Google Workspace integration):
+   - `GOOGLE_CLIENT_ID`: Your Google OAuth client ID
+   - `GOOGLE_CLIENT_SECRET`: Your Google OAuth client secret
+   - `GOOGLE_REDIRECT_URI`: Your OAuth redirect URI (e.g., http://localhost:8080/oauth2callback)
+
 #### Getting Required API Keys
 
 **For Telegram:**
@@ -257,6 +262,85 @@ After installation, you need to configure your environment variables in the `.en
 3. Navigate to API keys section
 4. Create a new secret key
 5. Copy the key (it won't be shown again)
+
+**For Google Workspace:**
+1. Visit https://console.cloud.google.com/
+2. Create a new project or select an existing one
+3. Enable the following APIs:
+   - Google Calendar API
+   - Gmail API
+   - Google Docs API
+   - Google Drive API
+   - Google Tasks API
+4. Go to Credentials
+5. Create OAuth 2.0 Client ID
+6. Set up OAuth consent screen
+7. Note your Client ID and Client Secret
+8. Add authorized redirect URIs
+
+### Google Workspace Integration
+
+The ICI framework includes seamless integration with Google Workspace services. You can use the following commands:
+
+1. **Schedule Meetings**:
+   ```
+   /schedule [meeting details]
+   ```
+   Example: `/schedule Team sync tomorrow at 2pm for 1 hour`
+
+2. **Create Email Drafts**:
+   ```
+   /email [email details]
+   ```
+   Example: `/email Send project update to team`
+
+3. **Create Documents**:
+   ```
+   /doc [document details]
+   ```
+   Example: `/doc Create meeting notes from last chat`
+
+4. **Create Tasks**:
+   ```
+   /task [task details]
+   ```
+   Example: `/task Review PR by EOD`
+
+5. **Create Plans**:
+   ```
+   /plan [plan type] [details]
+   ```
+   Example: `/plan travel Create itinerary for next week`
+
+The system will:
+- Extract relevant details from your conversation
+- Create the appropriate Google Workspace item
+- Provide you with links and confirmation
+- Handle errors gracefully with clear feedback
+
+#### Error Handling
+
+The Google Workspace integration includes robust error handling:
+
+1. **Authentication Errors**:
+   - If Google OAuth credentials are invalid or expired, you'll receive a clear message to update your credentials
+   - The system will guide you through the OAuth flow if needed
+
+2. **API Rate Limits**:
+   - If you hit Google API rate limits, the system will automatically retry with exponential backoff
+   - You'll be notified if the operation needs to be retried later
+
+3. **Permission Issues**:
+   - If the required Google Workspace permissions are missing, you'll receive specific guidance on which permissions to grant
+   - The system will validate permissions before attempting operations
+
+4. **Input Validation**:
+   - The system validates meeting times, email addresses, and other inputs before making API calls
+   - You'll receive immediate feedback if any required information is missing or invalid
+
+5. **Network Issues**:
+   - The system handles temporary network failures with automatic retries
+   - You'll be notified if the operation needs to be retried due to connectivity issues
 
 ### Running the Application
 
