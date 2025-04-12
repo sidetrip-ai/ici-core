@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Side Trip - Planning Your Next Side Trip</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;700&family=Space+Grotesk:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <nav class="navbar">
+            <div class="logo">
+                <span class="logo-icon">✈️</span>
+                <span class="logo-text">Side<span class="accent">Trip</span></span>
+            </div>
+            <div class="nav-links">
+                <a href="#" class="active"><i class="fas fa-home"></i> Home</a>
+                <a href="#"><i class="fas fa-calendar-alt"></i> Events</a>
+                <a href="#"><i class="fas fa-globe"></i> Destinations</a>
+            </div>
+            <div class="nav-profile">
+                <div class="profile-pic">P</div>
+                <span>Prakhar</span>
+            </div>
+        </nav>
+
+        <div class="main">
+            <div class="chat-panel">
+                <div class="panel-header">
+                    <h2><i class="fas fa-comments"></i> Telegram Chat</h2>
+                    <div class="toggle-chat">
+                        <span>Show Chat</span>
+                        <label class="switch">
+                            <input type="checkbox" id="chatToggle" checked>
+                            <span class="slider round"></span>
+                        </label>
+                    </div>
+                </div>
+                <div class="chat-container" id="chatContainer">
+                    <!-- Chat messages will be loaded dynamically -->
+                    <div class="loading-chat">
+                        <div class="spinner"></div>
+                        <p>Loading conversation...</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="travel-panel">
+                <div class="panel-header">
+                    <h2><i class="fas fa-plane-departure"></i> Travel Planner</h2>
+                </div>
+                <div class="travel-form">
+                    <div class="form-group">
+                        <label for="userPrompt">Enter your travel request:</label>
+                        <textarea id="userPrompt" rows="3" placeholder="Enter your travel request here..."></textarea>
+                    </div>
+                    <button id="generateBtn" class="generate-btn">
+                        <span class="btn-text">Generate Travel Plan</span>
+                        <i class="fas fa-arrow-right"></i>
+                    </button>
+                </div>
+                <div class="loading-container" id="loadingContainer" style="display: none;">
+                    <div class="terminal">
+                        <div class="terminal-header">
+                            <div class="terminal-button red"></div>
+                            <div class="terminal-button yellow"></div>
+                            <div class="terminal-button green"></div>
+                            <div class="terminal-title">side_trip</div>
+                        </div>
+                        <div class="terminal-body">
+                            <div class="terminal-line">$ Analyzing conversation data...</div>
+                            <div class="terminal-line">$ Extracting travel preferences...</div>
+                            <div class="terminal-line blink">$ Generating personalized travel plan...</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="results-container" id="resultsContainer" style="display: none;">
+                    <div class="results-header">
+                        <h3><i class="fas fa-map-marked-alt"></i> Your Travel Plan</h3>
+                        <button id="copyBtn" class="icon-btn" title="Copy to clipboard">
+                            <i class="fas fa-copy"></i>
+                        </button>
+                    </div>
+                    <div class="results-content" id="resultsContent">
+                        <!-- Travel plan will be inserted here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <footer>
+            <p>Powered by AI | &copy; 2025 Side Trip - Planning Your Next Side Trip</p>
+            <div class="social-icons">
+                <a href="#" title="Twitter"><i class="fab fa-twitter"></i></a>
+                <a href="#" title="Discord"><i class="fab fa-discord"></i></a>
+                <a href="#" title="GitHub"><i class="fab fa-github"></i></a>
+            </div>
+        </footer>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>
