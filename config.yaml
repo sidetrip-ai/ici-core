@@ -144,6 +144,9 @@ orchestrator:
           request_timeout: 30
           max_retries: 3
           batch_size: 50
+          client_id: $LINKEDIN_CLIENT_ID
+          client_secret: $LINKEDIN_CLIENT_SECRET
+          redirect_uri: $LINKEDIN_REDIRECT_URI
       preprocessor:
         chunk_size: 512
         include_overlap: true
