@@ -20,12 +20,9 @@ from ici.core.interfaces.prompt_builder import PromptBuilder
 from ici.core.interfaces.generator import Generator
 from ici.core.interfaces.vector_store import VectorStore
 from ici.core.interfaces.pipeline import IngestionPipeline
-from ici.core.interfaces.chat_history_manager import ChatHistoryManager
-from ici.core.interfaces.user_id_generator import UserIDGenerator
 from ici.core.exceptions import (
     OrchestratorError, ValidationError, VectorStoreError, 
-    PromptBuilderError, GenerationError, EmbeddingError,
-    ChatHistoryError, ChatIDError, UserIDError
+    PromptBuilderError, GenerationError, EmbeddingError
 )
 from ici.utils.config import get_component_config, load_config
 from ici.core.interfaces.embedder import Embedder
@@ -36,8 +33,6 @@ from ici.adapters.vector_stores.chroma import ChromaDBStore
 from ici.adapters.embedders.sentence_transformer import SentenceTransformerEmbedder
 from ici.adapters.pipelines.default import DefaultIngestionPipeline
 from ici.adapters.generators import create_generator
-from ici.adapters.chat import JSONChatHistoryManager
-from ici.adapters.user_id import DefaultUserIDGenerator
 
 
 class DefaultOrchestrator(Orchestrator):
@@ -66,19 +61,6 @@ class DefaultOrchestrator(Orchestrator):
         self._generator: Optional[Generator] = None
         self._pipeline: Optional[IngestionPipeline] = None
         self._embedder: Optional[Embedder] = None
-        
-        # Chat-specific components
-        self._chat_history_manager: Optional[ChatHistoryManager] = None
-        self._user_id_generator: Optional[UserIDGenerator] = None
-        
-        # Chat session mappings (user_id → current chat_id)
-        self._active_chats: Dict[str, str] = {}
-        
-        # Special commands
-        self._commands = {
-            "/new": self._handle_new_chat_command,
-            "/help": self._handle_help_command
-        }
         
         # Default configuration
         self._num_results = 3  # Default number of documents to retrieve
@@ -132,9 +114,6 @@ class DefaultOrchestrator(Orchestrator):
             # Initialize components
             await self._initialize_components()
             
-            # Initialize chat components
-            await self._initialize_chat_components()
-            
             self._is_initialized = True
             
             # Start the pipeline if configured to do so
@@ -174,42 +153,6 @@ class DefaultOrchestrator(Orchestrator):
                 "data": {"error": str(e), "error_type": type(e).__name__}
             })
             raise OrchestratorError(f"Orchestrator initialization failed: {str(e)}") from e
-    
-    async def _initialize_chat_components(self) -> None:
-        """
-        Initialize chat-specific components.
-        
-        Creates and initializes chat history manager and user ID generator.
-        
-        Raises:
-            OrchestratorError: If component initialization fails
-        """
-        try:
-            self.logger.info({
-                "action": "ORCHESTRATOR_CHAT_INIT_START",
-                "message": "Initializing chat components"
-            })
-            
-            # Initialize chat history manager
-            self._chat_history_manager = JSONChatHistoryManager()
-            await self._chat_history_manager.initialize()
-            
-            # Initialize user ID generator
-            self._user_id_generator = DefaultUserIDGenerator()
-            await self._user_id_generator.initialize()
-            
-            self.logger.info({
-                "action": "ORCHESTRATOR_CHAT_INIT_SUCCESS",
-                "message": "Chat components initialized successfully"
-            })
-            
-        except Exception as e:
-            self.logger.error({
-                "action": "ORCHESTRATOR_CHAT_INIT_ERROR",
-                "message": f"Failed to initialize chat components: {str(e)}",
-                "data": {"error": str(e), "error_type": type(e).__name__}
-            })
-            raise OrchestratorError(f"Chat component initialization failed: {str(e)}") from e
     
     async def _initialize_components(self) -> None:
         """
@@ -309,37 +252,15 @@ class DefaultOrchestrator(Orchestrator):
             # Generate standard user ID
             standard_user_id = await self._ensure_valid_user_id(source, user_id)
             
-            # Check if query is a special command
-            if query.strip().startswith("/"):
-                command = query.strip().split()[0].lower()
-                if command in self._commands:
-                    self.logger.info({
-                        "action": "ORCHESTRATOR_COMMAND",
-                        "message": f"Processing command: {command}",
-                        "data": {"user_id": standard_user_id, "command": command}
-                    })
-                    return await self._commands[command](standard_user_id, query)
-            
-            # Ensure user has an active chat
-            chat_id = await self._ensure_active_chat(standard_user_id)
-            
             self.logger.info({
                 "action": "ORCHESTRATOR_PROCESS_QUERY",
-                "message": "Processing query with chat context",
+                "message": "Processing query",
                 "data": {
                     "source": source,
                     "user_id": standard_user_id,
-                    "chat_id": chat_id,
                     "query_length": len(query) if query else 0
                 }
             })
-            
-            # Store user message in chat history
-            await self._chat_history_manager.add_message(
-                chat_id=chat_id,
-                content=query,
-                role="user"
-            )
             
             # Step 1: Build context for validation
             context = await self.build_context(standard_user_id)
@@ -367,14 +288,7 @@ class DefaultOrchestrator(Orchestrator):
                     }
                 })
                 
-                # Store system message about validation failure
-                error_message = self._error_messages.get("validation_failed")
-                await self._chat_history_manager.add_message(
-                    chat_id=chat_id,
-                    content=error_message,
-                    role="assistant"
-                )
-                return error_message
+                return self._error_messages.get("validation_failed")
             
             self.logger.info({
                 "action": "ORCHESTRATOR_VALIDATION_SUCCESS",
@@ -391,25 +305,11 @@ class DefaultOrchestrator(Orchestrator):
                 "data": {"documents": documents, "query": query, "num_results": self._num_results}
             })
             
-            # Get chat history for context
-            chat_messages = await self._chat_history_manager.get_messages(chat_id)
-            
-            # Step 5: Build prompt with documents, query, and chat history
-            prompt = await self._build_chat_prompt(query, documents, chat_messages)
+            # Step 5: Build prompt with documents and query
+            prompt = await self._prompt_builder.build_prompt(query, documents)
             
             # Step 6: Generate response
             response = await self._generate_response(prompt)
-            
-            # Store assistant response in chat history
-            await self._chat_history_manager.add_message(
-                chat_id=chat_id,
-                content=response,
-                role="assistant"
-            )
-            
-            # Try to generate a title for new chats
-            if len(chat_messages) <= 2:  # Only user's first message + system greeting
-                await self._chat_history_manager.generate_title(chat_id)
             
             # Log completion time
             elapsed_time = time.time() - start_time
@@ -418,7 +318,6 @@ class DefaultOrchestrator(Orchestrator):
                 "message": "Query processed successfully",
                 "data": {
                     "user_id": standard_user_id,
-                    "chat_id": chat_id,
                     "elapsed_time": elapsed_time,
                     "documents_found": len(documents),
                     "response_length": len(response)
@@ -447,9 +346,6 @@ class DefaultOrchestrator(Orchestrator):
         """
         Ensures a valid standardized user ID.
         
-        If the provided user ID is already valid, it's returned as is.
-        Otherwise, a new standardized user ID is generated.
-        
         Args:
             source: The source of the query (e.g., 'cli', 'web', 'api')
             provided_user_id: The user ID provided with the request
@@ -461,12 +357,8 @@ class DefaultOrchestrator(Orchestrator):
             OrchestratorError: If user ID validation/generation fails
         """
         try:
-            # Check if the provided user ID is already valid
-            if await self._user_id_generator.validate_id(provided_user_id):
-                return provided_user_id
-            
-            # Generate a new standard user ID
-            standard_user_id = await self._user_id_generator.generate_id(source, provided_user_id)
+            # For now, simply concatenate source and user ID
+            standard_user_id = f"{source}:{provided_user_id}"
             
             self.logger.info({
                 "action": "ORCHESTRATOR_USER_ID",
@@ -489,250 +381,6 @@ class DefaultOrchestrator(Orchestrator):
             
             # Fallback to a simple user ID
             return f"{source}:{provided_user_id}"
-    
-    async def _ensure_active_chat(self, user_id: str) -> str:
-        """
-        Ensures the user has an active chat session.
-        
-        If the user already has an active chat, returns its ID.
-        Otherwise, creates a new chat and returns the new ID.
-        
-        Args:
-            user_id: The standardized user ID
-            
-        Returns:
-            str: The active chat ID for the user
-            
-        Raises:
-            OrchestratorError: If chat creation/retrieval fails
-        """
-        try:
-            # Check if user already has an active chat
-            if user_id in self._active_chats:
-                return self._active_chats[user_id]
-            
-            # Create a new chat for the user
-            chat_id = await self._chat_history_manager.create_chat(user_id)
-            
-            # Add a system greeting message
-            await self._chat_history_manager.add_message(
-                chat_id=chat_id,
-                content="Hello! I'm your AI assistant. How can I help you today?",
-                role="system"
-            )
-            
-            # Store the active chat ID
-            self._active_chats[user_id] = chat_id
-            
-            self.logger.info({
-                "action": "ORCHESTRATOR_NEW_CHAT",
-                "message": "Created new chat for user",
-                "data": {"user_id": user_id, "chat_id": chat_id}
-            })
-            
-            return chat_id
-            
-        except Exception as e:
-            self.logger.error({
-                "action": "ORCHESTRATOR_CHAT_ERROR",
-                "message": f"Failed to ensure active chat: {str(e)}",
-                "data": {"error": str(e), "error_type": type(e).__name__}
-            })
-            
-            # Fallback to a temporary chat ID
-            temp_chat_id = f"temp_{int(time.time())}"
-            self._active_chats[user_id] = temp_chat_id
-            return temp_chat_id
-    
-    def _format_chat_history(self, messages: List[Dict[str, Any]]) -> str:
-        """
-        Formats chat history messages into a structured XML format.
-        
-        Args:
-            messages: List of chat messages
-            
-        Returns:
-            str: Formatted chat history with XML tags
-        """
-        if not messages:
-            return ""
-        
-        formatted_parts = []
-        formatted_parts.append("<conversation_history>")
-        
-        for msg in messages:
-            role = msg.get("role", "").lower()
-            content = msg.get("content", "")
-            
-            if role == "system":
-                # Skip system messages in the context
-                continue
-                
-            formatted_parts.append(f"  <{role}>{content}</{role}>")
-        
-        formatted_parts.append("</conversation_history>")
-        
-        return "\n".join(formatted_parts)
-    
-    async def _build_chat_prompt(
-        self, 
-        query: str, 
-        documents: List[Dict[str, Any]],
-        chat_messages: List[Dict[str, Any]]
-    ) -> str:
-        """
-        Builds a structured prompt that includes chat history and source-specific context.
-        
-        Args:
-            query: The user query
-            documents: Retrieved documents
-            chat_messages: Chat history messages
-            
-        Returns:
-            str: The constructed prompt
-            
-        Raises:
-            PromptBuilderError: If prompt building fails
-        """
-        try:
-            # Format chat history with XML tags
-            chat_context = self._format_chat_history(chat_messages)
-            
-            # If we're just showing documents directly, use the standard prompt builder
-            if not chat_context:
-                return await self._prompt_builder.build_prompt(query, documents)
-            
-            # Create the main prompt section with structured XML
-            main_prompt = ""
-            
-            # First add the overall <prompt> tag
-            main_prompt = "<prompt>\n"
-            
-            # Add the query
-            main_prompt += f"  <query>{query}</query>\n\n"
-            
-            # Add the conversation history section
-            if chat_context:
-                main_prompt += f"{chat_context}\n\n"
-                
-            # Let the prompt builder handle the document organization and add to main prompt
-            # We create a temporary document that contains just the query for the prompt builder
-            prompt_with_docs = await self._prompt_builder.build_prompt(query, documents)
-            
-            # Extract just the context part from the prompt builder result
-            # This is a bit hacky but allows us to reuse the document organization logic
-            context_start = prompt_with_docs.find("<relevant_context>")
-            context_end = prompt_with_docs.find("</relevant_context>")
-            
-            if context_start >= 0 and context_end >= 0:
-                context_part = prompt_with_docs[context_start:context_end + len("</relevant_context>")]
-                main_prompt += context_part
-            else:
-                # Fallback if we can't find the XML tags
-                main_prompt += "  <relevant_context>\n"
-                main_prompt += "    <source name=\"general\">\n"
-                for i, doc in enumerate(documents):
-                    text = doc.get("text", "") or doc.get("content", "")
-                    main_prompt += f"      <document id=\"doc_{i+1}\">\n"
-                    main_prompt += f"        <content>{text}</content>\n"
-                    main_prompt += "      </document>\n"
-                main_prompt += "    </source>\n"
-                main_prompt += "  </relevant_context>\n"
-            
-            # Close the main prompt tag
-            main_prompt += "</prompt>"
-            
-            self.logger.debug({
-                "action": "ORCHESTRATOR_PROMPT_BUILT",
-                "message": "Chat prompt built successfully with XML structure",
-                "data": {
-                    "documents_count": len(documents),
-                    "messages_count": len(chat_messages),
-                    "prompt_length": len(main_prompt)
-                }
-            })
-            
-            return main_prompt
-            
-        except Exception as e:
-            self.logger.error({
-                "action": "ORCHESTRATOR_PROMPT_ERROR",
-                "message": f"Failed to build chat prompt: {str(e)}",
-                "data": {"error": str(e), "error_type": type(e).__name__}
-            })
-            
-            # Return a simple prompt without context if prompt building fails
-            return f"Answer the following question based on your general knowledge: {query}"
-    
-    async def _handle_new_chat_command(self, user_id: str, query: str) -> str:
-        """
-        Handles the /new command to create a new chat.
-        
-        Args:
-            user_id: The user ID
-            query: The full command text
-            
-        Returns:
-            str: Response message
-        """
-        try:
-            # Create a new chat
-            chat_id = await self._chat_history_manager.create_chat(user_id)
-            
-            # Update active chat
-            self._active_chats[user_id] = chat_id
-            
-            # Add system greeting
-            await self._chat_history_manager.add_message(
-                chat_id=chat_id,
-                content="New conversation started. How can I help you today?",
-                role="system"
-            )
-            
-            self.logger.info({
-                "action": "ORCHESTRATOR_NEW_CHAT_COMMAND",
-                "message": "Created new chat via command",
-                "data": {"user_id": user_id, "chat_id": chat_id}
-            })
-            
-            return "I've started a new conversation for you. How can I help you today?"
-            
-        except Exception as e:
-            self.logger.error({
-                "action": "ORCHESTRATOR_NEW_CHAT_ERROR",
-                "message": f"Failed to create new chat: {str(e)}",
-                "data": {"error": str(e), "error_type": type(e).__name__}
-            })
-            
-            return "I couldn't create a new conversation. Please try again later."
-    
-    async def _handle_help_command(self, user_id: str, query: str) -> str:
-        """
-        Handles the /help command.
-        
-        Args:
-            user_id: The user ID
-            query: The full command text
-            
-        Returns:
-            str: Response message
-        """
-        help_text = (
-            "Available commands:\n"
-            "/new - Start a new conversation\n"
-            "/help - Show this help message\n\n"
-            "You can ask me questions, and I'll search for relevant information to assist you."
-        )
-        
-        # Store the help message in the active chat
-        chat_id = await self._ensure_active_chat(user_id)
-        await self._chat_history_manager.add_message(
-            chat_id=chat_id,
-            content=help_text,
-            role="assistant"
-        )
-        
-        return help_text
     
     async def _validate_query(self, query: str, context: Dict[str, Any], rules: List[Dict[str, Any]]) -> Tuple[bool, List[str]]:
         """
@@ -1195,16 +843,6 @@ class DefaultOrchestrator(Orchestrator):
             if self._pipeline and hasattr(self._pipeline, "healthcheck"):
                 pipeline_health = await self._pipeline.healthcheck()
                 health_result["components"]["pipeline"] = pipeline_health
-                
-            # Check chat history manager health
-            if self._chat_history_manager:
-                chat_manager_health = await self._chat_history_manager.healthcheck()
-                health_result["components"]["chat_history_manager"] = chat_manager_health
-            
-            # Check user ID generator health
-            if self._user_id_generator:
-                user_id_generator_health = await self._user_id_generator.healthcheck()
-                health_result["components"]["user_id_generator"] = user_id_generator_health
             
             # Determine overall health (all components must be healthy)
             components_healthy = all(
@@ -1221,9 +859,7 @@ class DefaultOrchestrator(Orchestrator):
                 "num_results": self._num_results,
                 "similarity_threshold": self._similarity_threshold,
                 "rules_source": self._rules_source,
-                "component_count": len(health_result["components"]),
-                "active_chats_count": len(self._active_chats),
-                "supported_commands": list(self._commands.keys())
+                "component_count": len(health_result["components"])
             })
             
             return health_result

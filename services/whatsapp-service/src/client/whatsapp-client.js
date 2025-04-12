@@ -20,6 +20,7 @@ class WhatsAppClient {
     this.sessionFolder = path.join(config.sessions.dataPath);
     this.initialized = false;
     this.initializationPromise = null;
+    this.contactsCache = new Map();
   }
 
   /**
@@ -200,7 +201,7 @@ class WhatsAppClient {
    * @param {Number} limit Maximum number of messages to fetch
    * @returns {Promise<Array>} Messages
    */
-  async fetchMessages(chatId, limit = 100) {
+  async fetchMessages(chatId, limit = Infinity) {
     if (!this.initialized || this.status !== 'CONNECTED') {
       throw new Error(`WhatsApp session not connected. Current status: ${this.status}`);
     }
@@ -225,7 +226,7 @@ class WhatsAppClient {
    * @param {Date} since Date to fetch messages from
    * @returns {Promise<Object>} Messages and conversations
    */
-  async fetchAllMessages(since = null) {
+  async fetchChats(since = null) {
     if (!this.initialized || this.status !== 'CONNECTED') {
       throw new Error(`WhatsApp session not connected. Current status: ${this.status}`);
     }
@@ -240,41 +241,8 @@ class WhatsAppClient {
         timestamp: chat.timestamp,
         unreadCount: chat.unreadCount
       }));
-      
-      // Get messages from each chat
-      const allMessages = [];
-      
-      for (const chat of chats) {
-        // Skip system messages and status broadcasts
-        if (chat.id._serialized === 'status@broadcast') continue;
-        
-        // Get messages
-        let messages;
-        
-        if (since) {
-          // Convert Date to timestamp in milliseconds
-          const sinceTimestamp = since.getTime();
-          
-          // Fetch more messages if we're filtering by date
-          messages = await chat.fetchMessages({ limit: config.api.maxMessages });
-          
-          // Filter messages by date
-          messages = messages.filter(msg => msg.timestamp * 1000 >= sinceTimestamp);
-        } else {
-          messages = await chat.fetchMessages({ limit: config.api.maxMessages });
-        }
-        
-        // Format messages with quoted details and add to result
-        const formattedMessages = await Promise.all(
-          messages.map(msg => this._formatMessageWithQuotes(msg))
-        );
-        allMessages.push(...formattedMessages);
-      }
-      
-      return {
-        messages: allMessages,
-        conversations
-      };
+
+      return conversations;
     } catch (error) {
       console.error('Error fetching all messages:', error);
       throw error;
@@ -315,11 +283,77 @@ class WhatsAppClient {
   }
 
   /**
+   * Get contact information by ID
+   * @param {String} contactId Contact ID
+   * @returns {Promise<Object>} Contact information
+   */
+  async getContactById(contactId) {
+    if (!this.initialized || this.status !== 'CONNECTED') {
+      throw new Error(`WhatsApp session not connected. Current status: ${this.status}`);
+    }
+
+    try {
+      // Check if contact exists in cache
+      if (this.contactsCache.has(contactId)) {
+        return this.contactsCache.get(contactId);
+      }
+      
+      // If not in cache, get contact by ID from client
+      const contact = await this.client.getContactById(contactId);
+      
+      if (!contact) {
+        throw new Error(`Contact not found: ${contactId}`);
+      }
+      
+      // Add to cache
+      this.contactsCache.set(contactId, contact);
+      
+      return contact;
+    } catch (error) {
+      console.error(`Error fetching contact information for ${contactId}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get multiple contacts by their IDs
+   * @param {Array<String>} contactIds Array of contact IDs
+   * @returns {Promise<Object>} Object mapping contact IDs to contact information
+   */
+  async getContactsByIds(contactIds) {
+    if (!this.initialized || this.status !== 'CONNECTED') {
+      throw new Error(`WhatsApp session not connected. Current status: ${this.status}`);
+    }
+
+    const results = {};
+    const errors = [];
+
+    // Process contacts in parallel
+    await Promise.all(contactIds.map(async (contactId) => {
+      try {
+        // Try to get from cache first, then fallback to getContactById
+        // which itself will update the cache if needed
+        const contact = await this.getContactById(contactId);
+        if (contact) {
+          results[contactId] = contact;
+        } else {
+          errors.push({ id: contactId, error: 'Contact not found' });
+        }
+      } catch (error) {
+        console.error(`Error fetching contact information for ${contactId}:`, error);
+        errors.push({ id: contactId, error: error.message || 'Unknown error' });
+      }
+    }));
+
+    return { contacts: results, errors: errors.length > 0 ? errors : undefined };
+  }
+
+  /**
    * Format a WhatsApp message into a standardized format
    * @param {Object} msg WhatsApp message object
    * @returns {Object} Formatted message
    */
-  _formatMessage(msg) {
+  _formatMessage(msg, authorName) {
     // Log message keys for debugging
     console.log('WhatsApp Message Keys:', Object.keys(msg));
     console.log('Message Type:', msg.type);
@@ -331,6 +365,7 @@ class WhatsAppClient {
       timestamp: msg.timestamp * 1000, // Convert to milliseconds
       from: msg.from,
       author: msg.author || msg.from,
+      authorName: authorName,
       chatId: msg.chatId || (msg.chat && msg.chat.id._serialized),
       isForwarded: msg.isForwarded,
       hasQuotedMsg: msg.hasQuotedMsg,
@@ -379,8 +414,22 @@ class WhatsAppClient {
    * @returns {Promise<Object>} Formatted message with quoted message details
    */
   async _formatMessageWithQuotes(msg) {
+    const authorId = msg.author || msg.from;
+    let authorName;
+    try {
+      authorName = await this.getContactById(authorId);
+    } catch(e) {
+      console.log({
+        msg: msg,
+        authorId: authorId,
+        authorName: authorName,
+        error: e
+      })
+      console.error("Error formatting message with quotes", e);
+      throw e;
+    }
     // Start with the basic formatted message
-    const formattedMessage = this._formatMessage(msg);
+    const formattedMessage = this._formatMessage(msg, authorName); 
     
     // If this is a reply, try to fetch the quoted message
     if (msg.hasQuotedMsg && !formattedMessage.quotedMsg) {

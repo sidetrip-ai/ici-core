@@ -110,10 +110,10 @@ class SentenceTransformerEmbedder(Embedder):
         
         try:
             if not text or not isinstance(text, str):
-                self.logger.warning({
-                    "action": "EMBEDDER_INVALID_INPUT",
+                self.logger.info({
+                    "action": "EMBEDDER_INPUT_EMPTY",
                     "message": "Invalid input for embedding",
-                    "data": {"input_type": type(text).__name__}
+                    "data": {"input_type": type(text).__name__, "input": text}
                 })
                 # Return zero vector for empty/invalid inputs with warning metadata
                 return [0.0] * self.dimensions, {"warning": "Invalid or empty input"}

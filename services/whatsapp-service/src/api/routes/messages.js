@@ -36,6 +36,8 @@ router.get('/messages', async (req, res) => {
       chatId, 
       limit ? parseInt(limit, 10) : 2000
     );
+
+    console.log(messages);
     
     res.json({
       success: true,
@@ -43,52 +45,6 @@ router.get('/messages', async (req, res) => {
     });
   } catch (error) {
     console.error('Error fetching messages:', error);
-    res.status(500).json({
-      success: false,
-      message: error.message || 'Failed to fetch messages'
-    });
-  }
-});
-
-/**
- * GET /api/fetch-all
- * Fetch all messages from all chats, optionally since a date
- */
-router.get('/fetch-all', async (req, res) => {
-  try {
-    const { since } = req.query;
-    
-    // Check if client is connected
-    const status = whatsAppClient.getStatus();
-    if (status.status !== 'CONNECTED') {
-      return res.status(400).json({
-        success: false,
-        message: `WhatsApp is not connected. Current status: ${status.status}`
-      });
-    }
-    
-    // Parse since date if provided
-    let sinceDate = null;
-    if (since) {
-      try {
-        sinceDate = new Date(since);
-      } catch (error) {
-        return res.status(400).json({
-          success: false,
-          message: 'Invalid date format for since parameter'
-        });
-      }
-    }
-    
-    // Fetch all messages
-    const data = await whatsAppClient.fetchAllMessages(sinceDate);
-    
-    res.json({
-      success: true,
-      ...data
-    });
-  } catch (error) {
-    console.error('Error fetching all messages:', error);
     res.status(500).json({
       success: false,
       message: error.message || 'Failed to fetch messages'
@@ -112,11 +68,11 @@ router.get('/chats', async (req, res) => {
     }
     
     // Fetch all chats
-    const data = await whatsAppClient.fetchAllMessages();
+    const data = await whatsAppClient.fetchChats();
     
     res.json({
       success: true,
-      chats: data.conversations
+      chats: data,
     });
   } catch (error) {
     console.error('Error fetching chats:', error);
@@ -156,6 +112,8 @@ router.get('/message-debug', async (req, res) => {
     
     // Find the first message with a quoted message
     const replyMessage = messages.find(msg => msg.hasQuotedMsg);
+
+    console.log(messages[0]);
     
     // Log all keys to console and return detailed structure
     if (replyMessage) {
@@ -242,6 +200,110 @@ router.get('/replies-info', async (req, res) => {
     res.status(500).json({
       success: false,
       message: error.message || 'Failed to get quoted messages info'
+    });
+  }
+});
+
+/**
+ * GET /api/contact/:contactId
+ * Get contact information by ID
+ */
+router.get('/contact/:contactId', async (req, res) => {
+  try {
+    const { contactId } = req.params;
+    
+    if (!contactId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Contact ID is required'
+      });
+    }
+    
+    // Check if client is connected
+    const status = whatsAppClient.getStatus();
+    if (status.status !== 'CONNECTED') {
+      return res.status(400).json({
+        success: false,
+        message: `WhatsApp is not connected. Current status: ${status.status}`
+      });
+    }
+    
+    // Fetch contact information using the new method
+    const contact = await whatsAppClient.getContactById(contactId);
+    
+    res.json({
+      success: true,
+      contact: {
+        id: contact.id._serialized,
+        name: contact.name,
+        pushname: contact.pushname,
+        shortName: contact.shortName,
+        isGroup: contact.isGroup,
+        isWAContact: contact.isWAContact,
+        isMyContact: contact.isMyContact
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching contact information:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to fetch contact information'
+    });
+  }
+});
+
+/**
+ * POST /api/contacts/batch
+ * Get contact information for multiple IDs in batch
+ */
+router.post('/contacts/batch', async (req, res) => {
+  try {
+    const { contactIds } = req.body;
+    
+    if (!contactIds || !Array.isArray(contactIds) || contactIds.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'contactIds array is required in request body'
+      });
+    }
+    
+    // Check if client is connected
+    const status = whatsAppClient.getStatus();
+    if (status.status !== 'CONNECTED') {
+      return res.status(400).json({
+        success: false,
+        message: `WhatsApp is not connected. Current status: ${status.status}`
+      });
+    }
+    
+    // Fetch contacts information in batch
+    const result = await whatsAppClient.getContactsByIds(contactIds);
+    
+    // Format the response
+    const formattedContacts = {};
+    
+    for (const [contactId, contact] of Object.entries(result.contacts)) {
+      formattedContacts[contactId] = {
+        id: contact.id._serialized,
+        name: contact.name,
+        pushname: contact.pushname,
+        shortName: contact.shortName,
+        isGroup: contact.isGroup,
+        isWAContact: contact.isWAContact,
+        isMyContact: contact.isMyContact
+      };
+    }
+    
+    res.json({
+      success: true,
+      contacts: formattedContacts,
+      errors: result.errors
+    });
+  } catch (error) {
+    console.error('Error fetching batch contact information:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to fetch batch contact information'
     });
   }
 });

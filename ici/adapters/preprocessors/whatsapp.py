@@ -186,7 +186,7 @@ class WhatsAppPreprocessor(Preprocessor):
                 return []
             
             # Save complete export
-            with open("db/whatsapp/chat_export.json", "w", encoding="utf-8") as f:
+            with open("db/whatsapp/chat_export_raw.json", "w", encoding="utf-8") as f:
                 json.dump(raw_data, f, indent=2, ensure_ascii=False)
             
             # Process each chat
@@ -230,6 +230,9 @@ class WhatsAppPreprocessor(Preprocessor):
                     "chat_count": len(conversations)
                 }
             })
+
+            with open("db/whatsapp/chat_export_preprocessed.json", "w", encoding="utf-8") as f:
+                json.dump(documents, f, indent=2, ensure_ascii=False)
             
             return documents
             
@@ -343,6 +346,7 @@ class WhatsAppPreprocessor(Preprocessor):
             
             # Extract main message details
             message_id = primary_message.get("id", "")
+            main_author_id = primary_message.get("author", "")
             main_author = self._extract_author(primary_message)
             main_timestamp = self._extract_timestamp(primary_message)
             main_datetime = self._format_datetime(main_timestamp)
@@ -386,6 +390,7 @@ class WhatsAppPreprocessor(Preprocessor):
                 "chat_name": chat_name,
                 "is_group": is_group,
                 "chat_type": chat_type,
+                "author_id": main_author_id,
                 "author": main_author,
                 "sender_name": main_author,
                 "timestamp": main_timestamp,
@@ -494,7 +499,7 @@ class WhatsAppPreprocessor(Preprocessor):
         """
         if message.get("fromMe"):
             return "Me"
-        return message.get("author", message.get("sender_name", message.get("notifyName", "Unknown")))
+        return message.get("author_name", message.get("sender_name", message.get("notifyName", "Unknown")))
     
     def _extract_timestamp(self, message: Dict[str, Any]) -> int:
         """

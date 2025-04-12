@@ -722,7 +722,7 @@ class TelegramIngestor(Ingestor):
                 
                 # Skip if we couldn't determine a name
                 if not name:
-                    self.logger.warning({
+                    self.logger.info({
                         "action": "UNNAMED_ENTITY",
                         "message": "Skipping entity with no name",
                         "data": {"entity_id": entity.id if hasattr(entity, 'id') else "unknown", "attributes": list(entity.__dict__.keys())}

@@ -3,7 +3,7 @@ system:
   loggers:
     structured_logger:
       console_output: true
-      level: INFO
+      level: WARNING
       log_file: ./logs/structured_logger.log
       name: structured_logger
       source_token: $SOURCE_TOKEN
@@ -74,7 +74,7 @@ orchestrator:
     sentence_transformer:
       batch_size: 32
       device: cpu
-      model_name: all-MiniLM-L6-v2
+      model_name: intfloat/multilingual-e5-large
   
   vector_store:
     chroma:
@@ -102,7 +102,7 @@ orchestrator:
         - "Mihirsinh Parmar"
         - "918010198714@c.us"
         - "Admin"   # Role identifier
-      template: "Note: In the context, the terms {terms} refer to you, the user. Messages from 'Me' are messages that you sent."
+      template: "Note: In the context, the terms {terms} refer to me, the user. Messages from 'Me' are messages that I sent."
   
   # Pipeline configurations
   pipelines:
@@ -150,6 +150,12 @@ orchestrator:
           session_id: "default_session"
           request_timeout: 30
           user_info_file: "db/whatsapp/user_info.json"
+          # Contact mapping configuration
+          contact_cache:
+            enabled: true
+            cache_file: "db/whatsapp/contacts.json"
+            batch_size: 200
+            cache_ttl_hours: 24
       preprocessor:
         chunk_size: 512
         include_overlap: true

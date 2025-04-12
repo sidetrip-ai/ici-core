@@ -276,7 +276,8 @@ class WhatsAppIngestor(Ingestor):
         
         try:
             # Fetch chats
-            chats = await self._fetch_chats()
+            data = await self._fetch_chats()
+            chats = data.get("chats", [])
             
             # Prepare result format
             result = {
@@ -297,7 +298,7 @@ class WhatsAppIngestor(Ingestor):
                     messages = await message_filter(chat_id)
                 else:
                     messages = await self._fetch_chat_messages(chat_id)
-                
+
                 # Calculate reply statistics for this chat
                 reply_count = sum(1 for msg in messages if self._is_reply(msg))
                 total_reply_messages += reply_count
@@ -323,6 +324,10 @@ class WhatsAppIngestor(Ingestor):
                         "reply_percentage": f"{(reply_count / len(messages) * 100):.1f}%" if messages else "0%"
                     }
                 })
+
+            # save complete conversations as json in file
+            with open("db/whatsapp/chat_export.json", "w", encoding="utf-8") as f:
+                json.dump(result, f, indent=2, ensure_ascii=False)
             
             # Add metadata
             result["metadata"] = {
@@ -579,7 +584,7 @@ class WhatsAppIngestor(Ingestor):
                         raise DataFetchError(f"Failed to fetch chats: {error_text}")
                     
                     data = await response.json()
-                    return data.get("chats", [])
+                    return data
                     
             except aiohttp.ClientError as e:
                 print(e)
@@ -630,6 +635,17 @@ class WhatsAppIngestor(Ingestor):
                             message["sender_id"] = message["author"]
                         elif "from" in message:
                             message["sender_id"] = message["from"]
+
+                        if "name" in message["authorName"]:
+                            message["author_name"] = message["authorName"]["name"]
+                        elif "shortName" in message["authorName"]:
+                            message["author_name"] = message["authorName"]["shortName"]
+                        elif "pushname" in message["authorName"]:
+                            message["author_name"] = message["authorName"]["pushname"]
+                        elif "number" in message["authorName"]:
+                            message["author_name"] = message["authorName"]["number"]
+                        else:
+                            message["author_name"] = message["authorName"]["id"]["user"]
                         
                         # Process reply/quoted message data if available
                         if message.get("hasQuotedMsg", False):
@@ -661,31 +677,6 @@ class WhatsAppIngestor(Ingestor):
                         "message": f"Added sender_id and reply data to {len(messages)} messages",
                         "data": {"chat_id": chat_id, "message_count": len(messages)}
                     })
-                    
-                    # Log the structure of the first message for debugging if available
-                    if messages and len(messages) > 0:
-                        # Get the first message keys for debugging
-                        first_msg = messages[0]
-                        
-                        # Check for quoted message data
-                        reply_fields = {
-                            "hasQuotedMsg": first_msg.get("hasQuotedMsg", False),
-                            "quotedMsgId": "quotedMsgId" in first_msg,
-                            "reply_to_id": "reply_to_id" in first_msg,
-                            "reply_data": "reply_data" in first_msg
-                        }
-                        
-                        self.logger.debug({
-                            "action": "MESSAGE_STRUCTURE",
-                            "message": "Sample message structure after transformation",
-                            "data": {
-                                "has_sender_id": "sender_id" in first_msg,
-                                "has_author": "author" in first_msg,
-                                "has_from": "from" in first_msg,
-                                "reply_fields": reply_fields,
-                                "keys": list(first_msg.keys())
-                            }
-                        })
                     
                     return messages
                     
