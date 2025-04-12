@@ -10,6 +10,7 @@
   "dependencies": {
     "cors": "^2.8.5",
     "express": "^4.18.2",
+    "puppeteer": "^24.6.1",
     "qrcode": "^1.5.3",
     "whatsapp-web.js": "^1.23.0",
     "ws": "^8.14.2"
@@ -17,4 +18,4 @@
   "devDependencies": {
     "nodemon": "^3.0.1"
   }
-} 
+}

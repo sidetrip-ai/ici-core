@@ -2,9 +2,9 @@
 pyyaml>=6.0
 
 # Development dependencies
-pytest>=7.0.0
+pytest>=8.0.0
 pytest-cov>=4.0.0
-pytest-asyncio>=0.25.0
+pytest-asyncio>=0.23.0
 black>=25.0.1
 
 sentence-transformers>=3.4.1  # For text embeddings
@@ -13,7 +13,7 @@ faiss-cpu>=1.7.0  # For vector similarity search
 telethon>=1.39.0  # For Telegram API access
 chromadb>=0.6.3  # For ChromaDB vector database
 numpy>=2.2.2  # Required for vector operations
-logtail-python>=0.3.3
+logtail-python>=0.2.6
 openai>=1.68.0
 langchain>=0.3.21  # Core LangChain functionality
 langchain-openai>=0.1.0  # For OpenAI integration
@@ -21,3 +21,6 @@ langchain-community>=0.3.20  # For additional model providers (including Ollama)
 langchain-anthropic>=0.3.10  # For Claude models
 langchain-ollama>=0.3.0
 python-dotenv>=1.0.1
+aiohttp>=3.9.1
+rich>=13.7.0  # For beautiful terminal interfaces
+discord.py>=2.3.0

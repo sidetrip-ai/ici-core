@@ -73,3 +73,5 @@ __all__ = [
     "ConfigurationError",
     "LoggerError",
 ]
+
+"""Core module containing base classes and interfaces."""

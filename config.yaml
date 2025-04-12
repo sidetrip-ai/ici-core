@@ -133,3 +133,33 @@ orchestrator:
         time_window_minutes: 15
         store_chat_history: true
         chat_history_dir: "db/whatsapp_chats"
+
+    linkedin:
+      schedule:
+        interval_minutes: 60  # Hourly updates
+      ingestor:
+        linkedin:
+          username: $LINKEDIN_USERNAME
+          password: $LINKEDIN_PASSWORD
+          request_timeout: 30
+          max_retries: 3
+          batch_size: 50
+      preprocessor:
+        chunk_size: 512
+        include_overlap: true
+        max_items_per_chunk: 10
+        store_history: true
+        history_dir: "db/linkedin_data"
+
+    discord_profile:
+      schedule:
+        interval_minutes: 1440 # Daily updates (e.g., once a day)
+      ingestor:
+        discord:
+          client_id: "1360574636945047628"
+          client_secret: "Mgx1C4M0QAKHfx7mxCr02Z9EfZt8HNgP"
+          redirect_uri: "http://localhost:8001/callback" # Must match Discord Dev Portal and ingestor code
+          # Optional settings:
+          # port: 8001
+          # scopes: ["identify", "guilds"] # Default scopes used if not specified
+          # timeout_seconds: 300
