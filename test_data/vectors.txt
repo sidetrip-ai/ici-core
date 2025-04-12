@@ -1,0 +1,1 @@
+Vector databases are optimized for storing and searching high-dimensional vectors.
