@@ -14,8 +14,8 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 from ici.core.interfaces import IngestionPipeline
 from ici.core.interfaces.embedder import Embedder
 from ici.core.interfaces.vector_store import VectorStore
-from ici.adapters.ingestors import TelegramIngestor, WhatsAppIngestor
-from ici.adapters.preprocessors import TelegramPreprocessor, WhatsAppPreprocessor
+from ici.adapters.ingestors import TelegramIngestor, WhatsAppIngestor, GitHubIngestor
+from ici.adapters.preprocessors import TelegramPreprocessor, WhatsAppPreprocessor, GitHubPreprocessor
 from ici.adapters.loggers import StructuredLogger
 from ici.utils.config import get_component_config, load_config
 from ici.core.exceptions import (
@@ -120,20 +120,20 @@ class DefaultIngestionPipeline(IngestionPipeline):
             self._is_initialized = True
             
             # Initialize ingestors based on configuration
-            
-            # For telegram pipeline
-            telegram_pipeline_config = get_component_config("pipelines.telegram", self._config_path)
-            if telegram_pipeline_config:
-                telegram_ingestor_config = get_component_config("pipelines.telegram.ingestor.telegram", self._config_path)
-                if telegram_ingestor_config:
-                    await self._initialize_telegram_ingestor(telegram_ingestor_config)
-            
+
             # For whatsapp pipeline
-            whatsapp_pipeline_config = get_component_config("pipelines.whatsapp", self._config_path)
+            whatsapp_pipeline_config = get_component_config("orchestrator.pipelines.whatsapp", self._config_path)
             if whatsapp_pipeline_config:
-                whatsapp_ingestor_config = get_component_config("pipelines.whatsapp.ingestor.whatsapp", self._config_path)
+                whatsapp_ingestor_config = get_component_config("orchestrator.pipelines.whatsapp.ingestor.whatsapp", self._config_path)
                 if whatsapp_ingestor_config:
                     await self._initialize_whatsapp_ingestor(whatsapp_ingestor_config)
+            
+            # For GitHub pipeline
+            github_pipeline_config = get_component_config("orchestrator.pipelines.github", self._config_path)
+            if github_pipeline_config:
+                github_ingestor_config = get_component_config("orchestrator.pipelines.github.ingestor.github", self._config_path)
+                if github_ingestor_config:
+                    await self._initialize_github_ingestor(github_ingestor_config)
             
             self.logger.info({
                 "action": "PIPELINE_INITIALIZED",
@@ -231,6 +231,47 @@ class DefaultIngestionPipeline(IngestionPipeline):
             error_message = f"Failed to initialize WhatsApp ingestor: {str(e)}"
             self.logger.error({
                 "action": "WHATSAPP_INITIALIZATION_ERROR",
+                "message": error_message,
+                "data": {"error": str(e)}
+            })
+            raise ConfigurationError(error_message) from e
+    
+    async def _initialize_github_ingestor(self, config: Dict[str, Any]) -> None:
+        """
+        Initialize and register the GitHub ingestor and preprocessor.
+        
+        Args:
+            config: GitHub ingestor configuration
+            
+        Raises:
+            ConfigurationError: If initialization fails
+        """
+        try:
+            # Create and initialize GitHub ingestor
+            github_ingestor = GitHubIngestor()
+            await github_ingestor.initialize()
+            
+            # Create and initialize GitHub preprocessor
+            github_preprocessor = GitHubPreprocessor()
+            await github_preprocessor.initialize()
+            
+            # Register the GitHub ingestor with a unique ID
+            ingestor_id = "@user/github_ingestor"
+            self.register_ingestor(
+                ingestor_id=ingestor_id,
+                ingestor=github_ingestor,
+                preprocessor=github_preprocessor
+            )
+            
+            self.logger.info({
+                "action": "GITHUB_INGESTOR_REGISTERED",
+                "message": f"Registered GitHub ingestor with ID: {ingestor_id}"
+            })
+            
+        except Exception as e:
+            error_message = f"Failed to initialize GitHub ingestor: {str(e)}"
+            self.logger.error({
+                "action": "GITHUB_INITIALIZATION_ERROR",
                 "message": error_message,
                 "data": {"error": str(e)}
             })
@@ -450,7 +491,7 @@ class DefaultIngestionPipeline(IngestionPipeline):
                 raw_data = await ingestor.fetch_new_data(since=last_datetime)
             
             # Check if data was retrieved
-            if not raw_data or not (raw_data.get("messages") or raw_data.get("conversations")):
+            if not raw_data:
                 self.logger.info({
                     "action": "PIPELINE_NO_DATA",
                     "message": "No new data to process"
@@ -458,6 +499,26 @@ class DefaultIngestionPipeline(IngestionPipeline):
                 results["success"] = True
                 results["message"] = "No new data to process"
                 return self._finalize_results(results, start_time)
+            
+            # Check data format based on ingestor type
+            if isinstance(ingestor, (TelegramIngestor, WhatsAppIngestor)):
+                if not (raw_data.get("messages") or raw_data.get("conversations")):
+                    self.logger.info({
+                        "action": "PIPELINE_NO_DATA",
+                        "message": "No new messages or conversations to process"
+                    })
+                    results["success"] = True
+                    results["message"] = "No new data to process"
+                    return self._finalize_results(results, start_time)
+            elif isinstance(ingestor, GitHubIngestor):
+                if not raw_data.get("repositories"):
+                    self.logger.info({
+                        "action": "PIPELINE_NO_DATA",
+                        "message": "No new GitHub repositories to process"
+                    })
+                    results["success"] = True
+                    results["message"] = "No new data to process"
+                    return self._finalize_results(results, start_time)
             
             # Process messages - preprocessor handles the specific ingestor's data format
             documents = await preprocessor.preprocess(raw_data)
@@ -483,19 +544,26 @@ class DefaultIngestionPipeline(IngestionPipeline):
             latest_timestamp = last_timestamp
             
             # Find messages sorted by timestamp for state tracking
-            messages = raw_data.get("messages", [])
-            if messages:
-                sorted_messages = sorted(messages, key=lambda m: m.get("timestamp", 0))
-                
-                # Get timestamp from latest message
-                latest_message = sorted_messages[-1]
-                # Convert to seconds if needed (WhatsApp uses milliseconds)
-                message_timestamp = latest_message.get("timestamp", 0)
-                if message_timestamp > 1600000000000:  # Likely milliseconds
-                    message_timestamp = message_timestamp / 1000
-                
-                if message_timestamp > latest_timestamp:
-                    latest_timestamp = message_timestamp
+            if isinstance(ingestor, (TelegramIngestor, WhatsAppIngestor)):
+                messages = raw_data.get("messages", [])
+                if messages:
+                    sorted_messages = sorted(messages, key=lambda m: m.get("timestamp", 0))
+                    
+                    # Get timestamp from latest message
+                    latest_message = sorted_messages[-1]
+                    # Convert to seconds if needed (WhatsApp uses milliseconds)
+                    message_timestamp = latest_message.get("timestamp", 0)
+                    if message_timestamp > 1600000000000:  # Likely milliseconds
+                        message_timestamp = message_timestamp / 1000
+                    
+                    if message_timestamp > latest_timestamp:
+                        latest_timestamp = message_timestamp
+            elif isinstance(ingestor, GitHubIngestor):
+                # For GitHub, we'll use the current time as the timestamp
+                # since we're reading from a file and don't have real-time updates
+                current_time = datetime.now(timezone.utc).timestamp()
+                if current_time > latest_timestamp:
+                    latest_timestamp = current_time
             
             # Process documents in batches
             for i in range(0, len(documents), self._batch_size):
@@ -537,7 +605,6 @@ class DefaultIngestionPipeline(IngestionPipeline):
                 # Update metadata with processing stats
                 new_metadata = metadata.copy()
                 new_metadata["last_run"] = datetime.now(timezone.utc).isoformat()
-                new_metadata["total_messages_processed"] = metadata.get("total_messages_processed", 0) + len(messages)
                 new_metadata["total_documents_processed"] = metadata.get("total_documents_processed", 0) + total_documents_processed
                 
                 # Set state with new timestamp and metadata
