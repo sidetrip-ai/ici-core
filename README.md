@@ -25,102 +25,22 @@ Key features include:
 ## 2. Getting Started
 
 ### Prerequisites
-- Anaconda ([Install here](https://anaconda.org/anaconda/conda))
 - Python 3.10 or higher
 - pip package manager
 - Git (if cloning the repository)
+- NodeJS 18+
 
 Note: If you face any issue while installing, check out [troubleshoot](./troubleshoot.md) file for known issues that might arise.
 
-### Upgrade Python Version on MacOS (Only if your version is less than 3.10)
-
-This repository requires Python 3.10 or higher. By default, MacOS comes with Python 3.9 pre-installed. To upgrade to Python 3.12 or any version 3.10 or later and ensure it’s set in your PATH, follow these step-by-step instructions. We’ll use **Homebrew**, a popular package manager for MacOS, to install and manage Python.
-
-### Check your python version
-```
-python3 --version
-```
-
-If the output is 3.10 or greater, than you can move on to [Setup section](#installation-and-setup)
-
-#### Step 1: Install Homebrew (if not already installed)
-
-Homebrew simplifies the installation of software like Python on MacOS. If you don’t have it installed yet, follow these steps:
-
-1. Open **Terminal**.
-2. Run the following command to install Homebrew:
-
-   ```bash
-   /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-   ```
-
-3. Follow the on-screen instructions to complete the installation. The script may prompt you to install Xcode Command Line Tools if they’re not already present—just follow the prompts to do so.
-
-   - **Note**: After installation, Homebrew might display instructions to add it to your PATH. For example, on Apple Silicon Macs, you may need to run:
-     ```bash
-     echo 'eval "$(/opt/homebrew/bin/brew shellenv)"' >> ~/.zshrc
-     ```
-     Then, restart Terminal or run `source ~/.zshrc`. On Intel Macs, this is typically not needed as `/usr/local/bin` is already in the PATH.
-
-#### Step 2: Install Python using Homebrew
-
-Once Homebrew is installed, you can use it to install a newer version of Python:
-
-1. In Terminal, run the following command to install the latest versionof Python available via Homebrew:
-
-   ```bash
-   brew install python
-   ```
-
-   - This installs the latest stable Python version (e.g., 3.11 or 3.12, depending on Homebrew’s current formula), which will be 3.10 or higher.
-   - **Optional**: If you specifically need Python 3.12 and it’s available, you can try `brew install python@3.12`. Check available versions with `brew search python` if needed.
-
-2. Homebrew will install Python and create symlinks in `/usr/local/bin` (Intel Macs) or `/opt/homebrew/bin` (Apple Silicon Macs), typically making it the default `python3` when you run it.
-
-#### Step 3: Verify the Python Version
-
-After installation, confirm that the correct Python version is set up:
-
-1. In Terminal, run:
-
-   ```bash
-   python3 --version
-   ```
-
-2. You should see output like `Python 3.x.y`, where `x` is 10 or higher (e.g., `Python 3.12.0`).
-
-3. **Troubleshooting**: If it still shows `Python 3.9.x`, the system Python is being used instead of the Homebrew version. To fix this:
-   - Check which Python is being used by running:
-     ```bash
-     which python3
-     ```
-     - If it shows `/usr/bin/python3` (system Python) instead of `/usr/local/bin/python3` (Intel) or `/opt/homebrew/bin/python3` (Apple Silicon), your PATH needs adjustment.
-   - Verify your PATH by running:
-     ```bash
-     echo $PATH
-     ```
-     - Ensure `/usr/local/bin` (Intel) or `/opt/homebrew/bin` (Apple Silicon) appears **before** `/usr/bin`.
-   - If it doesn’t, add the appropriate line to your shell configuration file (e.g., `~/.zshrc` for zsh, which is default on macOS Catalina and later, or `~/.bash_profile` for bash):
-     - For Intel Macs:
-       ```bash
-       export PATH="/usr/local/bin:$PATH"
-       ```
-     - For Apple Silicon Macs:
-       ```bash
-       export PATH="/opt/homebrew/bin:$PATH"
-       ```
-   - Save the file, then run `source ~/.zshrc` (or `source ~/.bash_profile`) or restart Terminal.
-   - Run `python3 --version` again to confirm.
-
-You now have Python 3.10 or higher installed and set as the default `python3` command. You can proceed with the repository setup using this version. If you encounter any issues, consult the Homebrew documentation or seek help from the repository maintainers.
 
 ### Installation and Setup
 
 Choose ONE of the following installation methods based on your operating system and preference:
 
-Note: For Windows users, use Option 3. Other options are experimental for Windows Users.
+Note: For Windows users, use Option C. Other options are experimental for Windows Users.
 
-#### Option A: Quick Setup (Recommended for Most Users)
+<details>
+<summary>Option A: Quick Setup (Recommended for Most Users)</summary>
 
 ##### For macOS/Linux:
 ```bash
@@ -156,8 +76,10 @@ venv\Scripts\activate
 copy .env.example .env
 # Edit .env with your API keys and configuration
 ```
+</details>
 
-#### Option B: One-line Installation (Experimental)
+<details>
+<summary>Option B: One-line Installation (Experimental)</summary>
 
 ##### For macOS/Linux:
 ```bash
@@ -185,8 +107,10 @@ venv\Scripts\activate
 copy .env.example .env
 # Edit .env with your API keys and configuration
 ```
+</details>
 
-#### Option C: Manual Installation (For Advanced Users)
+<details>
+<summary>Option C: Manual Installation (For Advanced Users)</summary>
 
 ##### For macOS/Linux:
 ```bash
@@ -227,6 +151,34 @@ python3 -m pip install -r requirements.txt
 copy .env.example .env
 # Edit .env with your API keys and configuration
 ```
+</details>
+
+### Setting Up WhatsApp Integration
+
+To enable WhatsApp functionality, you'll need to run the WhatsApp service separately. Follow these steps:
+
+1. Open a new terminal window
+2. Navigate to the WhatsApp service directory:
+   ```bash
+   cd services/whatsapp-service
+   ```
+3. Install the required Node.js dependencies:
+   ```bash
+   npm install
+   ```
+4. Start the WhatsApp service:
+   ```bash
+   npm run start
+   ```
+5. Once the service is running:
+   - Open http://localhost:3006 in your web browser
+   - You'll see a QR code on the page
+   - Open WhatsApp on your phone
+   - Go to Settings > WhatsApp Web/Desktop
+   - Scan the QR code with your phone's camera
+   - Wait for authentication to complete
+
+The WhatsApp service is now connected and ready to use with the main application.
 
 ### Configuration
 
