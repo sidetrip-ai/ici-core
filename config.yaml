@@ -30,6 +30,15 @@ system:
         - api
         - test
       default_identifier: anonymous
+  external_services:
+    perplexity:
+      api_key: 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
+      model: sonar
+      request_timeout: 60
+    travel_planner:
+      context_window_days: 7
+      max_chat_messages: 100
+      chat_history_dir: "db/telegram_chats"
 
 # Main Orchestrator Configuration
 orchestrator:
@@ -50,6 +59,9 @@ orchestrator:
   validation_rules:
     default: []
   
+  # Use travel-aware orchestrator
+  type: travel_orchestrator
+  
   # Components used by orchestrator
   generator:
     api_key: $GENERATOR_API_KEY
@@ -66,8 +78,8 @@ orchestrator:
     memory:
       k: 5
       type: buffer
-    model: deepseek-r1:32b
-    provider: ollama
+    model: moonshotai/kimi-vl-a3b-thinking:free
+    provider: openrouter
     type: langchain
   
   embedder:
@@ -116,20 +128,3 @@ orchestrator:
         time_window_minutes: 15
         store_chat_history: true
         chat_history_dir: "db/telegram_chats"
-    
-    whatsapp:
-      batch_size: 100
-      schedule:
-        interval_minutes: 5
-      ingestor:
-        whatsapp:
-          service_url: "http://localhost:3006"
-          session_id: "default_session"
-          request_timeout: 30
-      preprocessor:
-        chunk_size: 512
-        include_overlap: true
-        max_messages_per_chunk: 10
-        time_window_minutes: 15
-        store_chat_history: true
-        chat_history_dir: "db/whatsapp_chats"

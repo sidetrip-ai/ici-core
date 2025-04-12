@@ -28,9 +28,10 @@ except ImportError as e:
 
 try:
     from ici.adapters.orchestrators import DefaultOrchestrator
-    # print("Successfully imported DefaultOrchestrator")
+    from ici.adapters.orchestrators.travel_orchestrator import TravelOrchestrator
+    # print("Successfully imported orchestrators")
 except ImportError as e:
-    print(f"Error importing DefaultOrchestrator: {e}")
+    print(f"Error importing orchestrators: {e}")
     traceback.print_exc()
     sys.exit(1)
 
@@ -38,12 +39,13 @@ async def command_line_controller():
     """
     Initialize the DefaultOrchestrator and provide a CLI interface.
     """
-    print("Initializing DefaultOrchestrator...")
+    print("Initializing TravelOrchestrator...")
     try:
-        orchestrator = DefaultOrchestrator()
-        # print("Created DefaultOrchestrator instance")
+        # Use TravelOrchestrator instead of DefaultOrchestrator
+        orchestrator = TravelOrchestrator()
+        # print("Created TravelOrchestrator instance")
     except Exception as e:
-        print(f"Error creating DefaultOrchestrator: {e}")
+        print(f"Error creating TravelOrchestrator: {e}")
         traceback.print_exc()
         return 1
     
@@ -157,4 +159,9 @@ def print_help():
     print("  health  - Check the health of the system")
     print("  exit    - Exit the application")
     print("  quit    - Exit the application")
+    print("  /travel - Plan a trip (e.g., '/travel Plan a weekend in Paris')")
+    print("  /trip   - Alias for /travel command")
     print("Any other input will be processed as a query to the system.")
+    print("\nTravel Planning:")
+    print("  You can also analyze conversations with specific people by using:")
+    print("  '/travel Check what\'s happening in my chat with [person] and plan a trip accordingly'")
