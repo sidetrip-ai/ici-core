@@ -316,6 +316,16 @@ class TravelPlanner:
                 "data": {"query": query, "query_type": type(query).__name__}
             })
             
+            # CRITICAL: Sanitize the query to prevent it being processed as a role
+            # First ensure it's a string
+            if not isinstance(query, str):
+                self.logger.warning({
+                    "action": "QUERY_TYPE_ERROR",
+                    "message": "Query is not a string type",
+                    "data": {"type": type(query).__name__}
+                })
+                query = str(query)
+                
             # Make sure we're not passing the command prefix
             if query.startswith("/travel ") or query.startswith("/trip "):
                 # Strip the command prefix
@@ -326,8 +336,17 @@ class TravelPlanner:
                     "data": {"original": query, "cleaned": clean_query}
                 })
                 query = clean_query
+            
+            # Deep clone the query string to prevent any reference issues
+            sanitized_query = str(query)
+            
+            self.logger.info({
+                "action": "SANITIZED_QUERY",
+                "message": "Sanitized query for Perplexity API",
+                "data": {"sanitized_query": sanitized_query[:100]}
+            })
                 
-            travel_plan = await self._perplexity_api.plan_travel(chat_context, query)
+            travel_plan = await self._perplexity_api.plan_travel(chat_context, sanitized_query)
             
             self.logger.info({
                 "action": "TRAVEL_PLANNING_SUCCESS",

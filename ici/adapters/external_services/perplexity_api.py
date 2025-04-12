@@ -284,30 +284,60 @@ Please provide a comprehensive travel plan including:
 Use up-to-date information from the web for accurate planning.
 """
         
-        # Explicitly construct a valid payload for the Perplexity API
-        payload = {
-            "model": self._model,
-            "messages": [
-                {
-                    "role": "system", 
-                    "content": "You are a travel planning expert with access to real-time information through web search. Create detailed, actionable travel plans with practical information."
-                },
-                {
-                    "role": "user", 
-                    "content": prompt
-                }
-            ]
-        }
+        # Explicitly construct a valid payload for the Perplexity API with safety checks
+        try:
+            # Safe message construction
+            system_message = {
+                "role": "system", 
+                "content": "You are a travel planning expert with access to real-time information through web search. Create detailed, actionable travel plans with practical information."
+            }
+            
+            user_message = {
+                "role": "user", 
+                "content": prompt
+            }
+            
+            payload = {
+                "model": self._model,
+                "messages": [system_message, user_message],
+                "max_tokens": 4000,  # Allow for comprehensive travel plans
+                "temperature": 0.3,  # Lower temperature for more focused results
+                "top_p": 0.9,
+                # Remove search domain filter as it's causing validation errors
+                "return_images": False,  # No images needed
+                "return_related_questions": False,  # No related questions needed
+                "search_recency_filter": "month",  # Prefer recent information for travel plans (valid values: hour, day, week, month, year)
+                "top_k": 0,
+                "stream": False,  # Non-streaming response
+                "presence_penalty": 0,
+                "frequency_penalty": 1,  # Reduce repetition
+                "response_format": {"type": "text"},  # Explicitly set response format to text
+                "web_search_options": {"search_context_size": "high"}  # More comprehensive search results
+            }
+        except Exception as e:
+            self.logger.error({
+                "action": "PERPLEXITY_PAYLOAD_ERROR",
+                "message": f"Error constructing Perplexity API payload: {str(e)}",
+                "data": {"error": str(e), "error_type": type(e).__name__}
+            })
+            raise Exception(f"Failed to construct Perplexity API payload: {str(e)}")
         
-        # Extra validation to ensure we have proper role values
-        for msg in payload["messages"]:
-            if msg["role"] not in ["system", "user", "assistant"]:
-                self.logger.error({
-                    "action": "PERPLEXITY_INVALID_ROLE",
-                    "message": f"Invalid role detected: {msg['role']}",
-                    "data": {"messages": payload["messages"]}
+        # Do extra logging for debugging
+        self.logger.info({
+            "action": "PERPLEXITY_PAYLOAD_DEBUG", 
+            "message": "Constructed payload for Perplexity API",
+            "data": {"model": self._model, "message_count": len(payload["messages"])}
+        })
+        
+        # Ensure we always have valid roles
+        valid_roles = ["system", "user", "assistant"]
+        for i, msg in enumerate(payload["messages"]):
+            if "role" not in msg or msg["role"] not in valid_roles:
+                self.logger.warning({
+                    "action": "PERPLEXITY_FIXED_ROLE",
+                    "message": f"Fixed invalid role in message {i}",
+                    "data": {"original_role": msg.get("role", "<missing>"), "fixed_role": "user"}
                 })
-                # Fix the invalid role
                 msg["role"] = "user"
         
         self.logger.info({
