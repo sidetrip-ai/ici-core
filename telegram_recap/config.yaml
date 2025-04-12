@@ -1,0 +1,74 @@
+system:
+  loggers:
+    structured_logger:
+      console_output: true
+      level: WARNING
+      log_file: ./logs/structured_logger.log
+      name: structured_logger
+  state_manager:
+    db_path: ./db/sql/ingestor_state.db
+  validator:
+    allowed_sources:
+      - COMMAND_LINE
+    rules: []
+
+orchestrator:
+  error_messages:
+    generation_failed: "I'm having trouble generating a response right now."
+    no_documents: "I don't have specific information on that topic yet."
+    validation_failed: "I'm unable to process your request."
+  generation_options:
+    max_tokens: 1024
+    temperature: 0.7
+    num_results: 5
+    similarity_threshold: 0.7
+    rules_source: config
+    user_context:
+      default:
+        permission_level: user
+    validation_rules:
+      default: []
+
+generator:
+  api_key: $OPENAI_API_KEY
+  base_url: https://api.openai.com/v1
+  base_retry_delay: 1
+  chain_type: simple
+  default_options:
+    frequency_penalty: 0.0
+    max_tokens: 1024
+    presence_penalty: 0.0
+    temperature: 0.7
+    top_p: 1.0
+  max_retries: 3
+  memory:
+    k: 5
+    type: buffer
+  model: gpt-4
+  provider: openai
+  type: langchain
+
+embedder:
+  sentence_transformer:
+    batch_size: 32
+    device: cpu
+    model_name: all-MiniLM-L6-v2
+
+vector_store:
+  chroma:
+    type: chroma
+    collection_name: messages
+    embedding_function: sentence_transformer
+    persist_directory: ./db/vector/chroma_db
+
+prompt_builder:
+  error_template: "Unable to process: {error}"
+  fallback_template: "Answer based on general knowledge: {question}"
+  template: |
+    Context:
+    {context}
+
+    Question: {question}
+
+    Your response should be conversational and helpful.
+    Remember to continue from any previous conversation if relevant.
