@@ -1,0 +1,1 @@
+"""Adapter for Google Workspace API interactions.""" 

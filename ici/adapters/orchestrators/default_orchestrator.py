@@ -12,6 +12,8 @@ from typing import Dict, Any, List, Optional, Tuple
 import asyncio
 import traceback
 import json
+from datetime import datetime, timedelta
+import re
 
 from ici.core.interfaces.orchestrator import Orchestrator
 from ici.core.interfaces.validator import Validator
@@ -37,6 +39,21 @@ from ici.adapters.pipelines.default import DefaultIngestionPipeline
 from ici.adapters.generators import create_generator
 from ici.adapters.chat import JSONChatHistoryManager
 from ici.adapters.user_id import DefaultUserIDGenerator
+from ici.adapters.agent.chatbot import create_calendar_event_from_meeting, create_email_draft_from_chat, create_doc_from_chat, create_task_from_message, create_plan_from_chat
+from ici.adapters.google_workspace import (
+    create_calendar_event_from_meeting,
+    create_doc_from_summary,
+    create_email_draft,
+    create_plan_doc,
+    create_task
+)
+from ici.core.components.chat import ChatComponent
+from ici.core.components.prompt_builder import PromptBuilder
+from ici.core.components.validator import Validator
+from ici.core.orchestrator import Orchestrator
+from ici.utils.config import Config
+from ici.utils.logger import Logger
+from ici.utils.types import ChatMessage, Document
 
 
 class DefaultOrchestrator(Orchestrator):
@@ -76,7 +93,12 @@ class DefaultOrchestrator(Orchestrator):
         # Special commands
         self._commands = {
             "/new": self._handle_new_chat_command,
-            "/help": self._handle_help_command
+            "/help": self._handle_help_command,
+            "/schedule": self._handle_schedule_command,
+            "/email": self._handle_email_command,
+            "/doc": self._handle_doc_command,
+            "/task": self._handle_task_command,
+            "/plan": self._handle_plan_command
         }
         
         # Default configuration
@@ -717,6 +739,145 @@ class DefaultOrchestrator(Orchestrator):
         
         return help_text
     
+    async def _handle_schedule_command(self, user_id: str, query: str) -> str:
+        """Handle the schedule command to create calendar events."""
+        try:
+            # Get chat history for context
+            chat_messages = await self._get_chat_history(user_id)
+            
+            # Extract meeting details from chat history
+            meeting_details = await self._extract_meeting_from_chat(chat_messages)
+            
+            if not meeting_details:
+                return "❌ Could not extract meeting details from the conversation. Please provide more information."
+            
+            # Create calendar event
+            result = await create_calendar_event_from_meeting(meeting_details, create_meet=True)
+            
+            if result['success']:
+                response = (
+                    f"✅ Meeting scheduled successfully!\n\n"
+                    f"📅 Calendar Event: {result['event_link']}\n"
+                    f"🎥 Google Meet: {result['meet_link']}\n\n"
+                    f"Details:\n"
+                    f"Agenda: {meeting_details['Agenda']}\n"
+                    f"Time: {meeting_details['Start_time']} to {meeting_details['End_time']}\n"
+                    f"Participants: {meeting_details['Participants']}"
+                )
+            else:
+                response = f"❌ Failed to schedule meeting: {result['error']}"
+            
+            return response
+            
+        except Exception as e:
+            self.logger.error(f"Error in schedule command: {str(e)}")
+            return f"❌ An error occurred while scheduling the meeting: {str(e)}"
+    
+    async def _extract_meeting_from_chat(self, chat_messages: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+        """
+        Extracts meeting details from chat history.
+        
+        Args:
+            chat_messages: List of chat messages
+            
+        Returns:
+            Optional[Dict[str, Any]]: Extracted meeting details or None if not found
+        """
+        try:
+            # Format chat history for context
+            chat_context = self._format_chat_history(chat_messages)
+            
+            # Build a prompt to extract meeting details from chat history
+            prompt = f"""
+            Analyze the following chat history and extract meeting details.
+            Return ONLY a JSON object with the following fields:
+            - Agenda: The meeting topic/purpose (required)
+            - Start_time: The start time in ISO format (YYYY-MM-DD HH:MM) (optional)
+            - End_time: The end time in ISO format (YYYY-MM-DD HH:MM) (optional)
+            - Participants: List of email addresses or names (optional)
+            
+            Chat History:
+            {chat_context}
+            
+            Look for:
+            1. Meeting topics or agendas discussed
+            2. Proposed times or dates mentioned
+            3. People who should attend
+            4. Duration or end time mentioned
+            
+            Rules:
+            - Only Agenda is required, other fields are optional
+            - If time is not mentioned, set Start_time to 1 hour from now
+            - If duration is not mentioned, set End_time to 1 hour after Start_time
+            - If no participants are mentioned, leave Participants as empty string
+            - For dates, if not specified, use today's date
+            - For times, if not specified, use current time + 1 hour
+            
+            Return ONLY the JSON object, nothing else. Do not include any markdown formatting or additional text.
+            """
+            
+            # Generate response using the generator
+            response = await self._generate_response(prompt)
+            
+            try:
+                # Clean the response by removing markdown code blocks if present
+                cleaned_response = response.strip()
+                if cleaned_response.startswith("```json"):
+                    cleaned_response = cleaned_response[7:]
+                if cleaned_response.startswith("```"):
+                    cleaned_response = cleaned_response[3:]
+                if cleaned_response.endswith("```"):
+                    cleaned_response = cleaned_response[:-3]
+                cleaned_response = cleaned_response.strip()
+                
+                # Try to parse the cleaned response as JSON
+                meeting_details = json.loads(cleaned_response)
+                
+                # Ensure Agenda is present (required field)
+                if 'Agenda' not in meeting_details or not meeting_details['Agenda']:
+                    return None
+                
+                # Set default values for optional fields if not present
+                now = datetime.now()
+                if 'Start_time' not in meeting_details or not meeting_details['Start_time']:
+                    # Set to 1 hour from now
+                    start_time = now + timedelta(hours=1)
+                    meeting_details['Start_time'] = start_time.strftime('%Y-%m-%d %H:%M')
+                
+                if 'End_time' not in meeting_details or not meeting_details['End_time']:
+                    # Set to 1 hour after start time
+                    start_time = datetime.strptime(meeting_details['Start_time'], '%Y-%m-%d %H:%M')
+                    end_time = start_time + timedelta(hours=1)
+                    meeting_details['End_time'] = end_time.strftime('%Y-%m-%d %H:%M')
+                
+                if 'Participants' not in meeting_details:
+                    meeting_details['Participants'] = ''
+                elif isinstance(meeting_details['Participants'], list):
+                    meeting_details['Participants'] = ', '.join(meeting_details['Participants'])
+                
+                return meeting_details
+                    
+            except json.JSONDecodeError as e:
+                self.logger.error({
+                    "action": "ORCHESTRATOR_CHAT_EXTRACT_ERROR",
+                    "message": "Failed to parse meeting details from chat history",
+                    "data": {
+                        "response": response,
+                        "cleaned_response": cleaned_response,
+                        "error": str(e)
+                    }
+                })
+            
+            return None
+            
+        except Exception as e:
+            self.logger.error({
+                "action": "ORCHESTRATOR_CHAT_EXTRACT_ERROR",
+                "message": f"Failed to extract meeting from chat: {str(e)}",
+                "data": {"error": str(e), "error_type": type(e).__name__}
+            })
+            return None
+    
     async def _validate_query(self, query: str, context: Dict[str, Any], rules: List[Dict[str, Any]]) -> Tuple[bool, List[str]]:
         """
         Validates a query using the validator component.
@@ -1108,4 +1269,305 @@ class DefaultOrchestrator(Orchestrator):
                 "data": {"error": str(e), "error_type": type(e).__name__}
             })
             
-            return health_result 
+            return health_result
+    
+    async def _handle_email_command(self, user_id: str, query: str) -> str:
+        """
+        Handles the /email command to create email drafts.
+        
+        Args:
+            user_id: The user ID
+            query: The full command text
+            
+        Returns:
+            str: Response message
+        """
+        try:
+            # Get the active chat ID
+            chat_id = await self._ensure_active_chat(user_id)
+            
+            # Get chat history
+            chat_messages = await self._chat_history_manager.get_messages(chat_id)
+            
+            # Create email draft from chat
+            result = await create_email_draft_from_chat(chat_messages, self)
+            
+            if result['success']:
+                response = (
+                    f"✅ Email draft created successfully!\n\n"
+                    f"📧 To: {result['to']}\n"
+                    f"📝 Subject: {result['subject']}\n\n"
+                    f"You can find the draft in your Gmail drafts folder."
+                )
+            else:
+                response = f"❌ Failed to create email draft: {result['error']}"
+            
+            # Store the response in chat history
+            await self._chat_history_manager.add_message(
+                chat_id=chat_id,
+                content=response,
+                role="assistant"
+            )
+            
+            return response
+            
+        except Exception as e:
+            self.logger.error({
+                "action": "ORCHESTRATOR_EMAIL_ERROR",
+                "message": f"Failed to create email draft: {str(e)}",
+                "data": {"error": str(e), "error_type": type(e).__name__}
+            })
+            return f"❌ An error occurred while creating the email draft: {str(e)}"
+    
+    async def _handle_doc_command(self, user_id: str, query: str) -> str:
+        """
+        Handles the /doc command to create document summaries.
+        
+        Args:
+            user_id: The user ID
+            query: The full command text
+            
+        Returns:
+            str: Response message
+        """
+        try:
+            # Parse command arguments
+            args = query.lower().split()
+            group_name = None
+            title = None
+            
+            # Extract group name and title if provided
+            for i, arg in enumerate(args):
+                if arg == "group:" and i + 1 < len(args):
+                    group_name = args[i + 1]
+                elif arg == "title:" and i + 1 < len(args):
+                    title = " ".join(args[i + 1:])
+                    break
+            
+            # Get chat history
+            if group_name:
+                # Get messages from the specified group
+                chat_messages = await self._chat_history_manager.get_group_messages(group_name)
+                if not chat_messages:
+                    return f"❌ No messages found for group: {group_name}"
+            else:
+                # Get messages from current chat
+                chat_id = await self._ensure_active_chat(user_id)
+                chat_messages = await self._chat_history_manager.get_messages(chat_id)
+            
+            # Create document from chat
+            result = await create_doc_from_chat(chat_messages, self, title, group_name)
+            
+            if result['success']:
+                response = (
+                    f"✅ Document created successfully!\n\n"
+                    f"📄 Title: {result['title']}\n"
+                    f"🔗 Link: {result['doc_url']}\n\n"
+                    f"The document contains a summary of {'group: ' + group_name if group_name else 'our conversation'}."
+                )
+            else:
+                response = f"❌ Failed to create document: {result['error']}"
+            
+            # Store the response in chat history
+            chat_id = await self._ensure_active_chat(user_id)
+            await self._chat_history_manager.add_message(
+                chat_id=chat_id,
+                content=response,
+                role="assistant"
+            )
+            
+            return response
+            
+        except Exception as e:
+            self.logger.error({
+                "action": "ORCHESTRATOR_DOC_ERROR",
+                "message": f"Failed to create document: {str(e)}",
+                "data": {"error": str(e), "error_type": type(e).__name__}
+            })
+            return f"❌ An error occurred while creating the document: {str(e)}"
+    
+    async def _handle_task_command(self, user_id: str, query: str) -> str:
+        """Handle the /task command."""
+        try:
+            # Check if user wants to create task from chat history
+            if "from chat" in query.lower():
+                # Get the active chat ID
+                chat_id = await self._ensure_active_chat(user_id)
+                
+                # Get chat history
+                chat_messages = await self._chat_history_manager.get_messages(chat_id)
+                
+                # Get the last user message that contains tasks
+                last_user_message = None
+                for msg in reversed(chat_messages):
+                    if msg['role'] == 'user':
+                        last_user_message = msg['content']
+                        break
+                
+                if not last_user_message:
+                    return "❌ No user message found in chat history to create task from."
+                
+                # Use AI to extract tasks from the message
+                prompt = f"""
+                Analyze the following message and extract tasks. Return ONLY a JSON array of task objects.
+                Each task object should have these fields:
+                - title: A clear, concise title for the task
+                - notes: Detailed description of the task
+                - priority: Priority level (1-5, 1 being highest)
+                - due: Due date in RFC3339 format if mentioned, otherwise null
+
+                Message: {last_user_message}
+
+                Rules:
+                - Extract ALL tasks mentioned in the message, even if they are not explicitly labeled as tasks
+                - Look for action items, to-dos, or things that need to be done
+                - Make titles clear and actionable (e.g., "Do laundry" instead of "laundry")
+                - Include the full context in notes to explain the task
+                - Set priority based on urgency (1=urgent, 5=low priority)
+                - Only include due date if explicitly mentioned
+                - Return ONLY the JSON array, nothing else
+                - If no tasks are found, return an empty array []
+
+                Examples of tasks to extract:
+                - "I need to do laundry" -> {{"title": "Do laundry", "notes": "Laundry needs to be done", "priority": 3}}
+                - "Finish the report by tomorrow" -> {{"title": "Finish report", "notes": "Report needs to be completed", "priority": 2, "due": "2024-03-21T23:59:59Z"}}
+                - "Don't forget to call mom" -> {{"title": "Call mom", "notes": "Need to call mother", "priority": 3}}
+
+                Return ONLY the JSON array, nothing else.
+                """
+                
+                # Generate structured task objects using the AI
+                response = await self._generate_response(prompt)
+                
+                try:
+                    # Clean the response by removing markdown code blocks if present
+                    cleaned_response = response.strip()
+                    if cleaned_response.startswith("```json"):
+                        cleaned_response = cleaned_response[7:]
+                    if cleaned_response.startswith("```"):
+                        cleaned_response = cleaned_response[3:]
+                    if cleaned_response.endswith("```"):
+                        cleaned_response = cleaned_response[:-3]
+                    cleaned_response = cleaned_response.strip()
+                    
+                    # Parse the task objects
+                    tasks = json.loads(cleaned_response)
+                    
+                    if not tasks:
+                        return "❌ No tasks found in the chat history."
+                    
+                    # Create tasks
+                    created_tasks = []
+                    for task in tasks:
+                        # Ensure task has required fields
+                        if 'title' not in task:
+                            continue
+                        if 'notes' not in task:
+                            task['notes'] = f"Task extracted from chat: {last_user_message}"
+                        if 'priority' not in task:
+                            task['priority'] = 3  # Default priority
+                            
+                        # Pass the task details directly as a message
+                        result = await create_task_from_message(task, self)
+                        if result.get('success'):
+                            created_tasks.append(result)
+                    
+                    if not created_tasks:
+                        return "❌ Failed to create any tasks from chat history."
+                    
+                    # Format response
+                    response = "✅ Created tasks from chat history:\n\n"
+                    for task in created_tasks:
+                        response += f"📝 Title: {task.get('title', 'N/A')}\n"
+                        if task.get('notes'):
+                            response += f"📋 Description: {task.get('notes')}\n"
+                        if task.get('due'):
+                            response += f"⏰ Due: {task.get('due')}\n"
+                        if task.get('priority'):
+                            response += f"🎯 Priority: {task.get('priority')}\n"
+                        response += "\n"
+                    
+                    return response
+                    
+                except json.JSONDecodeError as e:
+                    return f"❌ Failed to parse task details: {str(e)}"
+            
+            # Handle direct task creation
+            result = await create_task_from_message(query, self)
+            
+            if result.get('success'):
+                response = "✅ Task created successfully!\n\n"
+                response += f"📝 Title: {result.get('title', 'N/A')}\n"
+                if result.get('notes'):
+                    response += f"📋 Description: {result.get('notes')}\n"
+                if result.get('due'):
+                    response += f"⏰ Due: {result.get('due')}\n"
+                if result.get('priority'):
+                    response += f"🎯 Priority: {result.get('priority')}\n"
+                return response
+            else:
+                return f"❌ Failed to create task: {result.get('error', 'Unknown error')}"
+            
+        except Exception as e:
+            return f"❌ Error creating task: {str(e)}"
+    
+    async def _handle_plan_command(self, user_id: str, query: str) -> str:
+        """
+        Handles the /plan command to create structured plans.
+        
+        Args:
+            user_id: The user ID
+            query: The full command text
+            
+        Returns:
+            str: Response message
+        """
+        try:
+            # Parse command arguments
+            args = query.lower().split()
+            plan_type = None
+            
+            # Extract plan type if provided (e.g., /plan travel or /plan event)
+            if len(args) > 1 and args[1] not in ["from", "chat"]:
+                plan_type = args[1]
+            
+            # Get chat history
+            chat_id = await self._ensure_active_chat(user_id)
+            chat_messages = await self._chat_history_manager.get_messages(chat_id)
+            
+            # Create plan from chat
+            result = await create_plan_from_chat(chat_messages, self, plan_type)
+            
+            if result['success']:
+                response = (
+                    f"✅ Plan created successfully!\n\n"
+                    f"📄 Title: {result['title']}\n"
+                    f"🔗 Document: {result['doc_url']}\n"
+                )
+                
+                if result['tasks_created'] > 0:
+                    response += f"\n📝 Created {result['tasks_created']} tasks from the plan.\n"
+                    response += "Tasks created:\n"
+                    for task in result['tasks']:
+                        response += f"- {task.get('title')}\n"
+                
+                response += "\nThe document contains a detailed structured plan based on our conversation."
+            else:
+                response = f"❌ Failed to create plan: {result['error']}"
+            
+            # Store the response in chat history
+            await self._chat_history_manager.add_message(
+                chat_id=chat_id,
+                content=response,
+                role="assistant"
+            )
+            
+            return response
+            
+        except Exception as e:
+            self.logger.error({
+                "action": "ORCHESTRATOR_PLAN_ERROR",
+                "message": f"Failed to create plan: {str(e)}",
+                "data": {"error": str(e), "error_type": type(e).__name__}
+            })
+            return f"❌ An error occurred while creating the plan: {str(e)}" 
