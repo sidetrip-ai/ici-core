@@ -25,12 +25,13 @@ Key features include:
 ## 2. Getting Started
 
 ### Prerequisites
-- Anaconda ([Install here](https://anaconda.org/anaconda/conda))
 - Python 3.10 or higher
 - pip package manager
 - Git (if cloning the repository)
+- NodeJS 18+
 
 Note: If you face any issue while installing, check out [troubleshoot](./troubleshoot.md) file for known issues that might arise.
+
 
 ### Upgrade Python Version on MacOS (Only if your version is less than 3.10)
 
@@ -114,13 +115,15 @@ After installation, confirm that the correct Python version is set up:
 
 You now have Python 3.10 or higher installed and set as the default `python3` command. You can proceed with the repository setup using this version. If you encounter any issues, consult the Homebrew documentation or seek help from the repository maintainers.
 
+
 ### Installation and Setup
 
 Choose ONE of the following installation methods based on your operating system and preference:
 
-Note: For Windows users, use Option 3. Other options are experimental for Windows Users.
+Note: For Windows users, use Option C. Other options are experimental for Windows Users.
 
-#### Option A: Quick Setup (Recommended for Most Users)
+<details>
+<summary>Option A: Quick Setup (Recommended for Most Users)</summary>
 
 ##### For macOS/Linux:
 ```bash
@@ -156,8 +159,10 @@ venv\Scripts\activate
 copy .env.example .env
 # Edit .env with your API keys and configuration
 ```
+</details>
 
-#### Option B: One-line Installation (Experimental)
+<details>
+<summary>Option B: One-line Installation (Experimental)</summary>
 
 ##### For macOS/Linux:
 ```bash
@@ -185,8 +190,10 @@ venv\Scripts\activate
 copy .env.example .env
 # Edit .env with your API keys and configuration
 ```
+</details>
 
-#### Option C: Manual Installation (For Advanced Users)
+<details>
+<summary>Option C: Manual Installation (For Advanced Users)</summary>
 
 ##### For macOS/Linux:
 ```bash
@@ -227,6 +234,34 @@ python3 -m pip install -r requirements.txt
 copy .env.example .env
 # Edit .env with your API keys and configuration
 ```
+</details>
+
+### Setting Up WhatsApp Integration
+
+To enable WhatsApp functionality, you'll need to run the WhatsApp service separately. Follow these steps:
+
+1. Open a new terminal window
+2. Navigate to the WhatsApp service directory:
+   ```bash
+   cd services/whatsapp-service
+   ```
+3. Install the required Node.js dependencies:
+   ```bash
+   npm install
+   ```
+4. Start the WhatsApp service:
+   ```bash
+   npm run start
+   ```
+5. Once the service is running:
+   - Open http://localhost:3006 in your web browser
+   - You'll see a QR code on the page
+   - Open WhatsApp on your phone
+   - Go to Settings > WhatsApp Web/Desktop
+   - Scan the QR code with your phone's camera
+   - Wait for authentication to complete
+
+The WhatsApp service is now connected and ready to use with the main application.
 
 ### Configuration
 
