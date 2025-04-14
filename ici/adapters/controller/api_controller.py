@@ -1,9 +1,19 @@
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from typing import Dict, Any
 from pydantic import BaseModel
 from ici.adapters.orchestrators.default_orchestrator import DefaultOrchestrator
 
 app = FastAPI(title="ICI Core API", description="API for ICI Core functionality")
+
+# Add CORS middleware to allow requests from all origins
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Allow all origins
+    allow_credentials=True,
+    allow_methods=["*"],  # Allow all methods
+    allow_headers=["*"],  # Allow all headers
+)
 
 class ContextRequest(BaseModel):
     source: str

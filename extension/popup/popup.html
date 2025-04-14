@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>ChatGPT Context Enhancer Settings</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 15px;
+      width: 350px;
+      color: #333;
+    }
+    
+    h1 {
+      font-size: 18px;
+      margin-bottom: 15px;
+      color: #4285f4;
+    }
+    
+    h2 {
+      font-size: 16px;
+      margin-top: 20px;
+      margin-bottom: 10px;
+      color: #555;
+    }
+    
+    .form-group {
+      margin-bottom: 15px;
+    }
+    
+    label {
+      display: block;
+      margin-bottom: 5px;
+      font-weight: bold;
+      font-size: 14px;
+    }
+    
+    input[type="text"] {
+      width: 100%;
+      padding: 8px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      box-sizing: border-box;
+      font-size: 14px;
+    }
+    
+    .toggle-container {
+      display: flex;
+      align-items: center;
+      margin-bottom: 15px;
+      padding: 10px;
+      background-color: #f5f5f5;
+      border-radius: 6px;
+    }
+    
+    .toggle-switch {
+      position: relative;
+      display: inline-block;
+      width: 50px;
+      height: 24px;
+      margin-right: 10px;
+    }
+    
+    .toggle-switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+    
+    .slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: #ccc;
+      transition: .4s;
+      border-radius: 24px;
+    }
+    
+    .slider:before {
+      position: absolute;
+      content: "";
+      height: 16px;
+      width: 16px;
+      left: 4px;
+      bottom: 4px;
+      background-color: white;
+      transition: .4s;
+      border-radius: 50%;
+    }
+    
+    input:checked + .slider {
+      background-color: #4CAF50;
+    }
+    
+    input:checked + .slider:before {
+      transform: translateX(26px);
+    }
+    
+    .toggle-label {
+      font-size: 14px;
+      font-weight: bold;
+      flex-grow: 1;
+    }
+    
+    .buttons {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 20px;
+    }
+    
+    .button-group {
+      display: flex;
+      justify-content: center;
+      margin-top: 15px;
+      gap: 10px;
+    }
+    
+    button {
+      padding: 8px 15px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+      transition: background-color 0.3s;
+    }
+    
+    .primary-btn {
+      background-color: #4285f4;
+      color: white;
+    }
+    
+    .danger-btn {
+      background-color: #f44336;
+      color: white;
+    }
+    
+    .success-btn {
+      background-color: #4CAF50;
+      color: white;
+    }
+    
+    button:hover {
+      opacity: 0.9;
+    }
+    
+    .status {
+      margin-top: 15px;
+      padding: 8px;
+      border-radius: 4px;
+      font-size: 14px;
+      display: none;
+    }
+    
+    .success {
+      background-color: #e6f4ea;
+      color: #137333;
+    }
+    
+    .error {
+      background-color: #fce8e6;
+      color: #c5221f;
+    }
+    
+    .info {
+      font-size: 12px;
+      color: #666;
+      margin-top: 5px;
+      font-style: italic;
+    }
+    
+    .card {
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      padding: 12px;
+      margin-bottom: 15px;
+    }
+    
+    .card-title {
+      font-weight: bold;
+      margin-bottom: 8px;
+      color: #555;
+    }
+    
+    .stats {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 10px;
+      font-size: 13px;
+    }
+    
+    .stat-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    
+    .stat-value {
+      font-weight: bold;
+      font-size: 18px;
+      color: #4285f4;
+    }
+    
+    .stat-label {
+      color: #666;
+      font-size: 12px;
+    }
+    
+    .section {
+      margin-bottom: 20px;
+      border-bottom: 1px solid #eee;
+      padding-bottom: 15px;
+    }
+    
+    .section:last-child {
+      border-bottom: none;
+    }
+  </style>
+</head>
+<body>
+  <h1>ChatGPT Context Enhancer</h1>
+  
+  <div class="section">
+    <div class="toggle-container">
+      <label class="toggle-switch">
+        <input type="checkbox" id="enhancementToggle">
+        <span class="slider"></span>
+      </label>
+      <span class="toggle-label">Context Enhancement</span>
+    </div>
+    <div class="info">Toggle to enable or disable context enhancement</div>
+  </div>
+  
+  <div class="section">
+    <h2>API Stats</h2>
+    <div class="stats">
+      <div class="stat-item">
+        <span class="stat-value" id="requestCount">0</span>
+        <span class="stat-label">Requests</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-value" id="avgTime">0ms</span>
+        <span class="stat-label">Avg Time</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-value" id="successRate">0%</span>
+        <span class="stat-label">Success</span>
+      </div>
+    </div>
+    <div class="button-group">
+      <button id="exportBtn" class="primary-btn">Export Data</button>
+      <button id="clearDataBtn" class="danger-btn">Clear Data</button>
+    </div>
+  </div>
+  
+  <div class="section">
+    <h2>Advanced Settings</h2>
+    <div class="form-group">
+      <label for="formSelector">Form Selector:</label>
+      <input type="text" id="formSelector" placeholder="CSS selector for form">
+      <div class="info">Example: form</div>
+    </div>
+    
+    <div class="form-group">
+      <label for="textareaSelector">Textarea Selector:</label>
+      <input type="text" id="textareaSelector" placeholder="CSS selector for textarea">
+      <div class="info">Example: textarea[data-id="root"]</div>
+    </div>
+    
+    <div class="form-group">
+      <label for="submitButtonSelector">Submit Button Selector:</label>
+      <input type="text" id="submitButtonSelector" placeholder="CSS selector for submit button">
+      <div class="info">Example: button[data-testid="send-button"]</div>
+    </div>
+    
+    <div class="buttons">
+      <button id="saveBtn" class="primary-btn">Save Settings</button>
+      <button id="resetBtn" class="danger-btn">Reset to Default</button>
+    </div>
+  </div>
+  
+  <div class="section">
+    <div class="toggle-container">
+      <label class="toggle-switch">
+        <input type="checkbox" id="debugToggle">
+        <span class="slider"></span>
+      </label>
+      <span class="toggle-label">Debug Mode</span>
+    </div>
+    <div class="info">Enable to see detailed logs in the console</div>
+  </div>
+  
+  <div id="statusMsg" class="status"></div>
+  
+  <script src="popup.js"></script>
+</body>
+</html> 

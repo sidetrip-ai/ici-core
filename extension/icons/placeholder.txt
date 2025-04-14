@@ -1,0 +1,13 @@
+Replace this file with actual icon files:
+
+1. icon16.png (16x16 pixels)
+2. icon48.png (48x48 pixels)
+3. icon128.png (128x128 pixels)
+
+You can create these icons using any image editor, or use a free icon generator online.
+For a quick implementation, you can use any free icon from sites like:
+- https://www.flaticon.com/
+- https://material.io/resources/icons/
+- https://www.iconfinder.com/
+
+Make sure to credit the icon creator if required by their license. 
