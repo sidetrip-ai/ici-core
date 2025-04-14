@@ -341,6 +341,110 @@ class DefaultOrchestrator(Orchestrator):
             
             # Return a generic error message
             return self._error_messages.get("generation_failed")
+        
+    async def get_context(self, source: str, user_id: str, query: str, additional_info: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Retrieves the context for a given user ID.
+        
+        Args:
+            user_id: The user ID to retrieve context for
+        
+        Returns:
+            Dict[str, Any]: The context for the user ID
+        """
+        if not self._is_initialized:
+            raise OrchestratorError("Orchestrator not initialized. Call initialize() first.")
+        
+        start_time = time.time()
+        
+        try:
+            # Generate standard user ID
+            standard_user_id = await self._ensure_valid_user_id(source, user_id)
+            
+            self.logger.info({
+                "action": "ORCHESTRATOR_PROCESS_QUERY",
+                "message": "Processing query",
+                "data": {
+                    "source": source,
+                    "user_id": standard_user_id,
+                    "query_length": len(query) if query else 0
+                }
+            })
+            
+            # Step 1: Build context for validation
+            context = await self.build_context(standard_user_id)
+            
+            # Add source to context
+            context["source"] = source
+            
+            # Add any additional info to context
+            if additional_info:
+                context.update(additional_info)
+            
+            # Step 2: Get rules for validation
+            rules = self.get_rules(standard_user_id)
+            
+            # Step 3: Validate the query
+            is_valid, failure_reasons = await self._validate_query(query, context, rules)
+            
+            if not is_valid:
+                self.logger.info({
+                    "action": "ORCHESTRATOR_VALIDATION_FAILED",
+                    "message": "Query validation failed",
+                    "data": {
+                        "user_id": standard_user_id,
+                        "failure_reasons": failure_reasons
+                    }
+                })
+                
+                return self._error_messages.get("validation_failed")
+            
+            self.logger.info({
+                "action": "ORCHESTRATOR_VALIDATION_SUCCESS",
+                "message": "Query validation successful",
+                "data": {"user_id": standard_user_id, "query": query}
+            })
+
+            # to do, implement a recursive search for relevant documents with LLM
+            # Step 4: Search for relevant documents
+            documents = await self._search_documents(query, self._num_results)
+
+            self.logger.info({
+                "action": "ORCHESTRATOR_DOCUMENTS_FOUND",
+                "message": "Documents found",
+                "data": {"documents": documents, "query": query, "num_results": self._num_results}
+            })
+            
+            # Step 5: Build prompt with documents and query
+            prompt = await self._prompt_builder.build_prompt(query, documents)
+            
+            # Log completion time
+            return {
+                "status": "success",
+                "query": query,
+                "prompt": prompt,
+                "documents": documents
+            }
+            
+        except Exception as e:
+            elapsed_time = time.time() - start_time
+            self.logger.error({
+                "action": "ORCHESTRATOR_PROCESS_ERROR",
+                "message": f"Failed to process query: {str(e)}",
+                "data": {
+                    "user_id": user_id,
+                    "error": str(e),
+                    "error_type": type(e).__name__,
+                    "elapsed_time": elapsed_time
+                }
+            })
+            
+            # Return a generic error message
+            return {
+                "status": "error",
+                "query": query,
+                "error": str(e)
+            }
     
     async def _ensure_valid_user_id(self, source: str, provided_user_id: str) -> str:
         """
