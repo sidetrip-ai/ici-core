@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "ChatGPT Context Enhancer",
+  "name": "Sidetrip DeepContext",
   "version": "1.0",
   "description": "Enhances ChatGPT prompts with personalized context",
   "icons": {
@@ -31,7 +31,7 @@
     }
   ],
   "host_permissions": [
-    "http://localhost:8000/"
+    "https://chatgpt.com/*"
   ],
   "permissions": [
     "activeTab",

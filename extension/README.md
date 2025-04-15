@@ -1,4 +1,4 @@
-# ChatGPT Context Enhancer
+# Sidetrip DeepContext
 
 This Chrome extension enhances your ChatGPT interactions by automatically adding relevant context to your prompts before sending them to ChatGPT.
 

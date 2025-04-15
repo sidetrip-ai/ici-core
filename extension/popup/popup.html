@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>ChatGPT Context Enhancer Settings</title>
+  <title>Sidetrip DeepContext Settings</title>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -200,6 +200,16 @@
       font-weight: bold;
       font-size: 18px;
       color: #4285f4;
+      position: relative;
+      cursor: default;
+    }
+    
+    /* Add a subtle indicator for dual time display */
+    .stat-value[title]:not([title=""]) {
+      text-decoration: underline;
+      text-decoration-style: dotted;
+      text-decoration-color: #aaa;
+      text-decoration-thickness: 1px;
     }
     
     .stat-label {
@@ -216,10 +226,28 @@
     .section:last-child {
       border-bottom: none;
     }
+    
+    /* Tooltip for time format explanation */
+    .time-help {
+      color: #666;
+      font-size: 11px;
+      margin-top: 2px;
+      text-align: center;
+      font-style: italic;
+      display: none;
+      padding: 4px;
+      background-color: #f5f5f5;
+      border-radius: 3px;
+    }
+    
+    /* Only show time help when dual times are displayed */
+    .has-dual-times .time-help {
+      display: block;
+    }
   </style>
 </head>
 <body>
-  <h1>ChatGPT Context Enhancer</h1>
+  <h1>Sidetrip DeepContext</h1>
   
   <div class="section">
     <div class="toggle-container">
@@ -232,7 +260,7 @@
     <div class="info">Toggle to enable or disable context enhancement</div>
   </div>
   
-  <div class="section">
+  <div class="section" id="apiStatsSection">
     <h2>API Stats</h2>
     <div class="stats">
       <div class="stat-item">
@@ -248,6 +276,7 @@
         <span class="stat-label">Success</span>
       </div>
     </div>
+    <div class="time-help">Format: network time / total time (including parsing) in milliseconds</div>
     <div class="button-group">
       <button id="exportBtn" class="primary-btn">Export Data</button>
       <button id="clearDataBtn" class="danger-btn">Clear Data</button>
