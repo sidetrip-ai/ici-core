@@ -73,7 +73,7 @@ orchestrator:
   embedder:
     sentence_transformer:
       batch_size: 32
-      device: cpu
+      device: cuda
       model_name: intfloat/multilingual-e5-large
   
   vector_store:
