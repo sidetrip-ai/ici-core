@@ -127,7 +127,7 @@ orchestrator:
           ignored_chats: []         # List of chat IDs to exclude from fetching
           
           # Rate limiting and batching settings
-          batch_size: 500            # Number of messages to fetch in each request
+          batch_size: 50000            # Number of messages to fetch in each request
           request_delay: 1.0        # Delay between batched requests in seconds
       preprocessor:
         chunk_size: 512

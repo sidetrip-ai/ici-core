@@ -794,6 +794,124 @@ class DefaultIngestionPipeline(IngestionPipeline):
             "data": {"results": results}
         })
     
+    async def start_whatsapp(self) -> None:
+        """
+        Start the ingestion process for WhatsApp ingestors only.
+        
+        This method filters registered ingestors to include only WhatsApp-related
+        ingestors, preventing Telegram or other data sources from being processed.
+        
+        Returns:
+            None
+            
+        Raises:
+            IngestionPipelineError: If starting the WhatsApp ingestion process fails
+        """
+        if not self._is_initialized:
+            raise IngestionPipelineError("Pipeline not initialized. Call initialize() first.")
+        
+        # Filter to include only WhatsApp ingestors
+        whatsapp_ingestors = {
+            ingestor_id: components 
+            for ingestor_id, components in self._ingestors.items() 
+            if "whatsapp" in ingestor_id.lower()
+        }
+        
+        if not whatsapp_ingestors:
+            self.logger.warning({
+                "action": "PIPELINE_NO_WHATSAPP_INGESTORS",
+                "message": "No WhatsApp ingestors registered, nothing to run"
+            })
+            return
+        
+        self.logger.info({
+            "action": "PIPELINE_WHATSAPP_START",
+            "message": f"Starting ingestion for {len(whatsapp_ingestors)} WhatsApp ingestors",
+            "data": {"whatsapp_ingestor_ids": list(whatsapp_ingestors.keys())}
+        })
+        
+        results = {}
+        
+        for ingestor_id in whatsapp_ingestors.keys():
+            try:
+                result = await self.run_ingestion(ingestor_id)
+                results[ingestor_id] = result
+            except Exception as e:
+                self.logger.error({
+                    "action": "WHATSAPP_INGESTOR_RUN_ERROR",
+                    "message": f"Error running ingestion for WhatsApp ingestor {ingestor_id}: {str(e)}",
+                    "data": {"ingestor_id": ingestor_id, "error": str(e)}
+                })
+                results[ingestor_id] = {
+                    "success": False,
+                    "error": str(e)
+                }
+        
+        self.logger.info({
+            "action": "PIPELINE_WHATSAPP_COMPLETE",
+            "message": "Completed ingestion for all WhatsApp ingestors",
+            "data": {"results": results}
+        })
+    
+    async def start_telegram(self) -> None:
+        """
+        Start the ingestion process for Telegram ingestors only.
+        
+        This method filters registered ingestors to include only Telegram-related
+        ingestors, preventing WhatsApp or other data sources from being processed.
+        
+        Returns:
+            None
+            
+        Raises:
+            IngestionPipelineError: If starting the Telegram ingestion process fails
+        """
+        if not self._is_initialized:
+            raise IngestionPipelineError("Pipeline not initialized. Call initialize() first.")
+        
+        # Filter to include only Telegram ingestors
+        telegram_ingestors = {
+            ingestor_id: components 
+            for ingestor_id, components in self._ingestors.items() 
+            if "telegram" in ingestor_id.lower()
+        }
+        
+        if not telegram_ingestors:
+            self.logger.warning({
+                "action": "PIPELINE_NO_TELEGRAM_INGESTORS",
+                "message": "No Telegram ingestors registered, nothing to run"
+            })
+            return
+        
+        self.logger.info({
+            "action": "PIPELINE_TELEGRAM_START",
+            "message": f"Starting ingestion for {len(telegram_ingestors)} Telegram ingestors",
+            "data": {"telegram_ingestor_ids": list(telegram_ingestors.keys())}
+        })
+        
+        results = {}
+        
+        for ingestor_id in telegram_ingestors.keys():
+            try:
+                result = await self.run_ingestion(ingestor_id)
+                results[ingestor_id] = result
+            except Exception as e:
+                self.logger.error({
+                    "action": "TELEGRAM_INGESTOR_RUN_ERROR",
+                    "message": f"Error running ingestion for Telegram ingestor {ingestor_id}: {str(e)}",
+                    "data": {"ingestor_id": ingestor_id, "error": str(e)}
+                })
+                results[ingestor_id] = {
+                    "success": False,
+                    "error": str(e)
+                }
+        
+        self.logger.info({
+            "action": "PIPELINE_TELEGRAM_COMPLETE",
+            "message": "Completed ingestion for all Telegram ingestors",
+            "data": {"results": results}
+        })
+    
     def stop(self) -> None:
         """
         Stop the ingestion process.

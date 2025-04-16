@@ -8,10 +8,20 @@ The module includes specialized orchestrators:
 - DefaultOrchestrator: Combined ingestion and query processing
 - QueryOrchestrator: Specialized for query processing only
 - IngestOrchestrator: Specialized for data ingestion only
+- FileIngestOrchestrator: Specialized for processing stored Telegram chat files
+- WhatsAppIngestOrchestrator: Specialized for WhatsApp-only data ingestion
 """
 
 from ici.adapters.orchestrators.default_orchestrator import DefaultOrchestrator
 from ici.adapters.orchestrators.query_orchestrator import QueryOrchestrator
 from ici.adapters.orchestrators.ingest_orchestrator import IngestOrchestrator
+from ici.adapters.orchestrators.file_ingest_orchestrator import FileIngestOrchestrator
+from ici.adapters.orchestrators.whatsapp_ingest_orchestrator import WhatsAppIngestOrchestrator
 
-__all__ = ["DefaultOrchestrator", "QueryOrchestrator", "IngestOrchestrator"] 
+__all__ = [
+    "DefaultOrchestrator", 
+    "QueryOrchestrator", 
+    "IngestOrchestrator", 
+    "FileIngestOrchestrator",
+    "WhatsAppIngestOrchestrator"
+] 

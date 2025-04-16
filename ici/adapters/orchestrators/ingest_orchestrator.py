@@ -114,10 +114,10 @@ class IngestOrchestrator(Orchestrator):
     
     async def start_ingestion(self) -> None:
         """
-        Start the ingestion pipeline.
+        Start the Telegram-only ingestion pipeline.
         
-        This method initiates the ingestion process, which will continue running
-        in the background until stopped.
+        This method initiates the ingestion process, which will only process
+        Telegram data sources, explicitly avoiding WhatsApp or other ingestors.
         
         Returns:
             None
@@ -131,22 +131,23 @@ class IngestOrchestrator(Orchestrator):
         try:
             self.logger.info({
                 "action": "INGEST_ORCHESTRATOR_START_INGESTION",
-                "message": "Starting ingestion pipeline"
+                "message": "Starting Telegram-only ingestion pipeline"
             })
             
-            await self._pipeline.start()
+            # Use the Telegram-specific start method instead of generic start
+            await self._pipeline.start_telegram()
             
             self.logger.info({
                 "action": "INGEST_ORCHESTRATOR_INGESTION_STARTED",
-                "message": "Ingestion pipeline started successfully"
+                "message": "Telegram-only ingestion pipeline started successfully"
             })
         except Exception as e:
             self.logger.error({
                 "action": "INGEST_ORCHESTRATOR_START_ERROR",
-                "message": f"Failed to start ingestion: {str(e)}",
+                "message": f"Failed to start Telegram ingestion: {str(e)}",
                 "data": {"error": str(e), "error_type": type(e).__name__}
             })
-            raise OrchestratorError(f"Failed to start ingestion: {str(e)}") from e
+            raise OrchestratorError(f"Failed to start Telegram ingestion: {str(e)}") from e
     
     def stop_ingestion(self) -> None:
         """

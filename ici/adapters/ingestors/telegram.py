@@ -25,6 +25,24 @@ from ici.utils.config import get_component_config, load_config
 from ici.core.exceptions import ConfigurationError
 from ici.utils.datetime_utils import from_isoformat, ensure_tz_aware
 
+# Import file storage utilities
+from ici.adapters.storage.telegram.file_manager import FileManager
+from ici.adapters.storage.telegram.enhanced_file_manager import EnhancedFileManager
+from ici.utils.incremental_utils import (
+    get_latest_message_timestamp,
+    update_conversation_metadata,
+    should_fetch_incrementally,
+    merge_conversations,
+    prepare_min_id_for_fetch,
+    should_fetch_incrementally_by_id
+)
+from ici.utils.conversation_utils import (
+    filter_conversations,
+    get_fetch_mode_from_config,
+    add_conversation_type_metadata
+)
+from ici import DataFetchError
+
 
 class TelegramIngestor(Ingestor):
     """
@@ -55,6 +73,9 @@ class TelegramIngestor(Ingestor):
         # User info properties
         self._user_info = None
         self._user_info_file = None
+        
+        # File manager for storing conversations
+        self._file_manager = None
     
     async def initialize(self) -> None:
         """
@@ -142,6 +163,15 @@ class TelegramIngestor(Ingestor):
                 self._session_string = telegram_config["session_string"]
             
             self._user_info_file = telegram_config.get("user_info_file", os.path.join("db", "telegram", "user_info.json"))
+            
+            # Initialize file manager
+            storage_dir = telegram_config.get("json_storage_path", os.path.join("db", "telegram", "chats"))
+            self._file_manager = EnhancedFileManager(storage_dir=storage_dir, logger=self.logger)
+            self.logger.info({
+                "action": "FILE_MANAGER_INITIALIZED",
+                "message": "Enhanced file manager initialized",
+                "data": {"storage_dir": storage_dir}
+            })
             
             # Load cached user info
             await self._load_user_info()
@@ -412,6 +442,68 @@ class TelegramIngestor(Ingestor):
             })
             raise DataFetchError(f"Failed to fetch Telegram user info: {str(e)}") from e
     
+    async def _save_conversation_with_retry(self, conversation_id: str, conversation_data: Dict[str, Any], 
+                                        max_retries: int = 3) -> bool:
+        """
+        Save conversation with retry logic for handling transient errors.
+        
+        Args:
+            conversation_id: Unique identifier for the conversation
+            conversation_data: Conversation data to save
+            max_retries: Maximum number of save attempts before giving up
+            
+        Returns:
+            bool: True if save succeeded, False otherwise
+        """
+        for attempt in range(1, max_retries + 1):
+            try:
+                self._file_manager.save_conversation(conversation_data, force=False)
+                self.logger.info({
+                    "action": "CONVERSATION_SAVED",
+                    "message": f"Saved conversation {conversation_id} successfully",
+                    "data": {
+                        "conversation_id": conversation_id,
+                        "attempt": attempt
+                    }
+                })
+                return True
+            except FileExistsError:
+                # File already exists, log and consider this a success
+                self.logger.warning({
+                    "action": "CONVERSATION_EXISTS",
+                    "message": f"Conversation {conversation_id} already exists, skipping save",
+                    "data": {"conversation_id": conversation_id}
+                })
+                return True
+            except Exception as e:
+                self.logger.warning({
+                    "action": "SAVE_RETRY",
+                    "message": f"Save attempt {attempt}/{max_retries} failed: {str(e)}",
+                    "data": {
+                        "conversation_id": conversation_id,
+                        "error": str(e),
+                        "error_type": type(e).__name__,
+                        "attempt": attempt,
+                        "max_retries": max_retries
+                    }
+                })
+                
+                if attempt == max_retries:
+                    self.logger.error({
+                        "action": "SAVE_FAILED",
+                        "message": f"Failed to save conversation after {max_retries} attempts",
+                        "data": {
+                            "conversation_id": conversation_id,
+                            "error": str(e)
+                        }
+                    })
+                    return False
+                
+                # Wait before retrying with exponential backoff
+                await asyncio.sleep(1 * attempt)
+        
+        return False  # Should not reach here but added as safety
+
     async def _save_user_info(self) -> None:
         """Save user info to persistent storage."""
         if not self._user_info:
@@ -828,8 +920,8 @@ class TelegramIngestor(Ingestor):
             # Get the entity for this conversation
             entity = await client.get_entity(conversation_id)
             
-            # Fetch messages in batches
-            telegram_messages = await self._fetch_messages_in_batches(client, entity, limit)
+            # Fetch messages in batches - pass min_id parameter
+            telegram_messages = await self._fetch_messages_in_batches(client, entity, limit, min_id)
             
             # Process messages into our format
             messages = []
@@ -1108,6 +1200,71 @@ class TelegramIngestor(Ingestor):
             # Return empty list on error
             return []
     
+    async def _get_messages_since_date(self, client: TelegramClient, conversation_id: int, 
+                                  since_date: datetime) -> List[Dict[str, Any]]:
+        """
+        Get messages from a conversation since a specific date.
+        
+        Args:
+            client: Connected TelegramClient
+            conversation_id: ID of the conversation
+            since_date: Datetime to fetch messages from
+            
+        Returns:
+            List[Dict[str, Any]]: List of messages newer than since_date
+        """
+        # Format the date for log output
+        since_str = since_date.isoformat() if since_date else "None"
+        now_str = datetime.now(timezone.utc).isoformat()
+        
+        self.logger.info({
+            "action": "GET_MESSAGES_SINCE_DATE",
+            "message": f"Getting messages for conversation {conversation_id} since {since_str}",
+            "data": {
+                "conversation_id": conversation_id,
+                "since_date": since_str,
+                "current_date": now_str
+            }
+        })
+        
+        # Use the date range method which already handles filtering by date
+        return await self._get_messages_in_date_range(
+            client, 
+            conversation_id, 
+            since_str, 
+            now_str
+        )
+
+    async def _get_messages_since_id(self, client: TelegramClient, conversation_id: int, 
+                               min_id: int) -> List[Dict[str, Any]]:
+        """
+        Get messages from a conversation with ID greater than the specified min_id.
+        
+        Args:
+            client: Connected TelegramClient
+            conversation_id: ID of the conversation
+            min_id: Minimum message ID to fetch (exclusive)
+            
+        Returns:
+            List[Dict[str, Any]]: List of messages with ID > min_id
+        """
+        self.logger.info({
+            "action": "GET_MESSAGES_SINCE_ID",
+            "message": f"Getting messages for conversation {conversation_id} with ID > {min_id}",
+            "data": {
+                "conversation_id": conversation_id,
+                "min_id": min_id
+            }
+        })
+        
+        # Get messages with ID > min_id, using the efficient min_id parameter
+        return await self._get_messages(
+            client, 
+            conversation_id, 
+            limit=self._max_messages_per_chat,
+            min_id=min_id
+        )
+
     async def _fetch_all_conversations(self) -> Dict[str, Any]:
         """
         Fetch all conversations and their messages with relationship context.
@@ -1128,65 +1285,212 @@ class TelegramIngestor(Ingestor):
                 }
         """
         async def fetch_operation(client):
-            # Structure similar to WhatsApp ingestor output
+            # Structure for storing results
             result = {
                 "conversations": {},  # Dictionary of conversation_id -> [messages]
                 "conversation_details": {}  # Dictionary of conversation metadata
             }
             
             # Get all conversations
-            conversations = await self._get_conversations(client)
+            conversations_list = await self._get_conversations(client)
+            if not conversations_list:
+                self.logger.warning({
+                    "action": "NO_CONVERSATIONS",
+                    "message": "No conversations found to fetch"
+                })
+                return result
 
             self.logger.info({
                 "action": "TELEGRAM_FETCH_CONVERSATIONS",
-                "message": f"Fetched {len(conversations)} conversations",
-                "data": {"conversation_count": len(conversations)}
+                "message": f"Fetched {len(conversations_list)} conversations",
+                "data": {"conversation_count": len(conversations_list)}
             })
             
             # Store conversation details for metadata access
-            for conversation in conversations:
+            for conversation in conversations_list:
                 chat_id = str(conversation["id"])
                 result["conversation_details"][chat_id] = conversation
             
-            # Get messages from each conversation
-            for conversation in conversations:
-                conversation_id = conversation["id"]
-                
+            # Apply conversation type filtering based on fetch mode
+            # fetch_mode = get_fetch_mode_from_config()
+            conversations_dict = {
+                str(conv["id"]): {"metadata": conv} 
+                for conv in conversations_list
+            }
+            filtered_conversations = filter_conversations(conversations_dict, "initial")
+            
+            if not filtered_conversations:
                 self.logger.info({
-                    "action": "TELEGRAM_FETCH_CONVERSATION",
-                    "message": f"Fetching messages from: {conversation['name']}",
-                    "data": {
-                        "conversation_id": conversation_id,
-                        "conversation_name": conversation["name"]
-                    }
+                    "action": "NO_FILTERED_CONVERSATIONS",
+                    "message": f"No conversations matched the filter criteria for fetch mode: initial",
                 })
+                return result
                 
-                # Get messages from this conversation
-                messages = await self._get_messages(client, conversation_id)
+            # Get messages from each conversation
+            for conversation_id, conversation_data in filtered_conversations.items():
+                if "metadata" not in conversation_data:
+                    self.logger.warning({
+                        "action": "MISSING_METADATA",
+                        "message": f"Conversation {conversation_id} is missing metadata, skipping",
+                        "data": {"conversation_id": conversation_id}
+                    })
+                    continue
+                    
+                conv_metadata = conversation_data["metadata"]
+                conversation_id = str(conv_metadata.get("id", conversation_id))
                 
-                # Skip if no messages
-                if not messages:
+                # Skip if metadata doesn't have required fields
+                if not all(key in conv_metadata for key in ["id", "name"]):
+                    self.logger.warning({
+                        "action": "INCOMPLETE_METADATA",
+                        "message": f"Conversation {conversation_id} has incomplete metadata, skipping",
+                        "data": {"conversation_id": conversation_id}
+                    })
                     continue
                 
-                # Add conversation metadata to each message
-                for message in messages:
-                    message["conversation_name"] = conversation["name"]
-                    message["conversation_username"] = conversation.get("username")
-                    message["source"] = "telegram"
-                    message["is_group"] = conversation.get("is_group", False)
-                    message["chat_type"] = conversation.get("chat_type", "private")
+                # Try ID-based incremental fetching first (more efficient), 
+                # fall back to date-based if not possible
+                use_id_based, latest_msg_info = should_fetch_incrementally_by_id(conversation_id, self._file_manager)
                 
-                # Store messages organized by conversation ID - similar to WhatsApp structure
-                result["conversations"][str(conversation_id)] = messages
+                if use_id_based and latest_msg_info and latest_msg_info["id"]:
+                    self.logger.info({
+                        "action": "INCREMENTAL_FETCH_BY_ID",
+                        "message": f"Using ID-based incremental fetching for conversation {conversation_id}",
+                        "data": {
+                            "conversation_id": conversation_id,
+                            "conversation_name": conv_metadata["name"],
+                            "latest_message_id": latest_msg_info["id"],
+                            "latest_message_date": latest_msg_info["date"]
+                        }
+                    })
+                    
+                    # Get only new messages using ID-based fetching (more efficient)
+                    messages = await self._get_messages_since_id(
+                        client, int(conversation_id), latest_msg_info["id"]
+                    )
+                    
+                    if not messages:
+                        self.logger.info({
+                            "action": "NO_NEW_MESSAGES",
+                            "message": f"No new messages found for conversation {conversation_id}",
+                            "data": {"conversation_id": conversation_id}
+                        })
+                        continue
+                        
+                # Fall back to full fetch
+                else:
+                    # Not using incremental fetching, do a full fetch
+                    self.logger.info({
+                        "action": "TELEGRAM_FETCH_CONVERSATION",
+                        "message": f"Fetching all messages from: {conv_metadata['name']}",
+                        "data": {
+                            "conversation_id": conversation_id,
+                            "conversation_name": conv_metadata["name"]
+                        }
+                    })
+                    
+                    # Get messages from this conversation
+                    messages = await self._get_messages(client, int(conversation_id))
+                    
+                    # Skip if no messages
+                    if not messages:
+                        self.logger.warning({
+                            "action": "NO_MESSAGES",
+                            "message": f"No messages found for conversation {conversation_id}",
+                            "data": {"conversation_id": conversation_id}
+                        })
+                        continue
+                
+                # For all incremental fetching cases, merge with existing conversation if we have new messages
+                if use_id_based and messages:
+                    try:
+                        existing_conversation = self._file_manager.load_conversation(conversation_id)
+                        
+                        # Add conversation metadata to each message
+                        for message in messages:
+                            message["conversation_name"] = conv_metadata["name"]
+                            message["conversation_username"] = conv_metadata.get("username")
+                            message["source"] = "telegram"
+                            message["is_group"] = conv_metadata.get("is_group", False)
+                            message["chat_type"] = conv_metadata.get("chat_type", "private")
+                        
+                        # Merge new messages with existing conversation
+                        updated_conversation = merge_conversations(existing_conversation, messages)
+                        
+                        # Update metadata
+                        updated_conversation = update_conversation_metadata(updated_conversation)
+                        
+                        # Add conversation type metadata
+                        updated_conversation = add_conversation_type_metadata(
+                            {"temp_id": updated_conversation}
+                        )["temp_id"]
+                        
+                        # Save the updated conversation
+                        save_success = await self._save_conversation_with_retry(
+                            conversation_id, updated_conversation, max_retries=3
+                        )
+                        
+                        if save_success:
+                            # Add all messages to result for consistency with non-incremental fetch
+                            all_messages = []
+                            for msg_id, msg in updated_conversation.get("messages", {}).items():
+                                all_messages.append(msg)
+                            result["conversations"][conversation_id] = all_messages
+                        
+                    except Exception as e:
+                        self.logger.error({
+                            "action": "INCREMENTAL_UPDATE_FAILED",
+                            "message": f"Failed to update conversation incrementally: {str(e)}",
+                            "data": {
+                                "conversation_id": conversation_id,
+                                "error": str(e),
+                                "error_type": type(e).__name__
+                            }
+                        })
+                else:
+                    # For non-incremental case, create a new storage conversation
+                    # Add conversation metadata to each message
+                    for message in messages:
+                        message["conversation_name"] = conv_metadata["name"]
+                        message["conversation_username"] = conv_metadata.get("username")
+                        message["source"] = "telegram"
+                        message["is_group"] = conv_metadata.get("is_group", False)
+                        message["chat_type"] = conv_metadata.get("chat_type", "private")
+                    
+                    # Create conversation data structure for storage
+                    storage_conversation = {
+                        "metadata": conv_metadata,
+                        "messages": {str(msg["id"]): msg for msg in messages}
+                    }
+                    
+                    # Add conversation type metadata
+                    storage_conversation = add_conversation_type_metadata(
+                        {"temp_id": storage_conversation}
+                    )["temp_id"]
+                    
+                    # Save the conversation
+                    save_success = await self._save_conversation_with_retry(
+                        conversation_id, storage_conversation, max_retries=3
+                    )
+                    
+                    # Only add to result if save was successful
+                    if save_success:
+                        result["conversations"][conversation_id] = messages
+                    else:
+                        self.logger.warning({
+                            "action": "SAVE_CONVERSATION_FAILED",
+                            "message": f"Failed to save conversation {conversation_id}",
+                            "data": {"conversation_id": conversation_id}
+                        })
                 
                 # Add delay to avoid rate limiting
                 await asyncio.sleep(self._request_delay)
-            
+
             return result
         
         # Execute with a fresh client
         return await self._with_client(fetch_operation)
-    
+
     async def _fetch_conversations_in_range(self, start_date: str, end_date: str) -> Dict[str, Any]:
         """
         Fetch conversations and messages within a specified date range.
@@ -1211,61 +1515,244 @@ class TelegramIngestor(Ingestor):
                 }
         """
         async def fetch_operation(client):
-            # Structure similar to WhatsApp ingestor output
+            # Structure for storing results
             result = {
                 "conversations": {},  # Dictionary of conversation_id -> [messages]
                 "conversation_details": {}  # Dictionary of conversation metadata
             }
             
+            # Validate date strings
+            try:
+                start_datetime = from_isoformat(start_date)
+                end_datetime = from_isoformat(end_date)
+            except ValueError as e:
+                self.logger.error({
+                    "action": "INVALID_DATE_FORMAT",
+                    "message": f"Invalid date format: {str(e)}",
+                    "data": {"start_date": start_date, "end_date": end_date}
+                })
+                return result
+            
             # Get all conversations
-            conversations = await self._get_conversations(client)
+            conversations_list = await self._get_conversations(client)
+            if not conversations_list:
+                self.logger.warning({
+                    "action": "NO_CONVERSATIONS",
+                    "message": "No conversations found to fetch"
+                })
+                return result
 
             self.logger.info({
                 "action": "TELEGRAM_FETCH_CONVERSATIONS",
-                "message": f"Fetched {len(conversations)} conversations",
-                "data": {"conversation_count": len(conversations)}
+                "message": f"Fetched {len(conversations_list)} conversations",
+                "data": {"conversation_count": len(conversations_list)}
             })
             
             # Store conversation details for metadata access
-            for conversation in conversations:
+            for conversation in conversations_list:
                 chat_id = str(conversation["id"])
                 result["conversation_details"][chat_id] = conversation
+            
+            # Apply conversation type filtering based on fetch mode
+            fetch_mode = get_fetch_mode_from_config()
+            conversations_dict = {
+                str(conv["id"]): {"metadata": conv} 
+                for conv in conversations_list
+            }
+            filtered_conversations = filter_conversations(conversations_dict, fetch_mode)
+            
+            if not filtered_conversations:
+                self.logger.info({
+                    "action": "NO_FILTERED_CONVERSATIONS",
+                    "message": f"No conversations matched the filter criteria for fetch mode: {fetch_mode}",
+                })
+                return result
             
             self.logger.info({
                 "action": "TELEGRAM_FETCH_DATE_RANGE",
                 "message": f"Fetching messages in date range: {start_date} to {end_date}",
                 "data": {
                     "start_date": start_date,
-                    "end_date": end_date
+                    "end_date": end_date,
+                    "filtered_conversation_count": len(filtered_conversations)
                 }
             })
             
             # Get messages from each conversation in the date range
-            for conversation in conversations:
-                conversation_id = conversation["id"]
+            for conversation_id, conversation_data in filtered_conversations.items():
+                if "metadata" not in conversation_data:
+                    self.logger.warning({
+                        "action": "MISSING_METADATA",
+                        "message": f"Conversation {conversation_id} is missing metadata, skipping",
+                        "data": {"conversation_id": conversation_id}
+                    })
+                    continue
+                    
+                conv_metadata = conversation_data["metadata"]
+                conversation_id = str(conv_metadata.get("id", conversation_id))
                 
-                # Get messages in date range
-                messages = await self._get_messages_in_date_range(
-                    client, 
-                    conversation_id, 
-                    start_date, 
-                    end_date
-                )
-                
-                # Skip if no messages in this range
-                if not messages:
+                # Skip if metadata doesn't have required fields
+                if not all(key in conv_metadata for key in ["id", "name"]):
+                    self.logger.warning({
+                        "action": "INCOMPLETE_METADATA",
+                        "message": f"Conversation {conversation_id} has incomplete metadata, skipping",
+                        "data": {"conversation_id": conversation_id}
+                    })
                     continue
                 
-                # Add conversation metadata to each message
-                for message in messages:
-                    message["conversation_name"] = conversation["name"]
-                    message["conversation_username"] = conversation.get("username")
-                    message["source"] = "telegram"
-                    message["is_group"] = conversation.get("is_group", False)
-                    message["chat_type"] = conversation.get("chat_type", "private")
+                # Check if we should use incremental fetching
+                use_incremental, latest_date = should_fetch_incrementally(conversation_id, self._file_manager)
                 
-                # Store messages organized by conversation ID - similar to WhatsApp structure
-                result["conversations"][str(conversation_id)] = messages
+                # Only use incremental if latest message is after start_date
+                if use_incremental and latest_date and latest_date > start_datetime:
+                    self.logger.info({
+                        "action": "INCREMENTAL_FETCH_DATE_RANGE",
+                        "message": f"Using incremental fetching for conversation {conversation_id}",
+                        "data": {
+                            "conversation_id": conversation_id,
+                            "conversation_name": conv_metadata["name"],
+                            "latest_date": latest_date.isoformat(),
+                            "start_date": start_date,
+                            "end_date": end_date
+                        }
+                    })
+                    
+                    # Use the later of start_date or latest_date as our fetch point
+                    fetch_from_date = max(latest_date, start_datetime)
+                    fetch_from_str = fetch_from_date.isoformat()
+                    
+                    # Get messages in adjusted date range
+                    messages = await self._get_messages_in_date_range(
+                        client, 
+                        int(conversation_id),
+                        fetch_from_str,
+                        end_date
+                    )
+                    
+                    if not messages:
+                        self.logger.info({
+                            "action": "NO_NEW_MESSAGES",
+                            "message": f"No new messages found for conversation {conversation_id} in date range",
+                            "data": {"conversation_id": conversation_id}
+                        })
+                        continue
+                    
+                    # Load existing conversation to merge with
+                    try:
+                        existing_conversation = self._file_manager.load_conversation(conversation_id)
+                        
+                        # Add conversation metadata to each message
+                        for message in messages:
+                            message["conversation_name"] = conv_metadata["name"]
+                            message["conversation_username"] = conv_metadata.get("username")
+                            message["source"] = "telegram"
+                            message["is_group"] = conv_metadata.get("is_group", False)
+                            message["chat_type"] = conv_metadata.get("chat_type", "private")
+                        
+                        # Merge new messages with existing conversation
+                        updated_conversation = merge_conversations(existing_conversation, messages)
+                        
+                        # Update metadata
+                        updated_conversation = update_conversation_metadata(updated_conversation)
+                        
+                        # Add conversation type metadata
+                        updated_conversation = add_conversation_type_metadata(
+                            {"temp_id": updated_conversation}
+                        )["temp_id"]
+                        
+                        # Save the updated conversation
+                        save_success = await self._save_conversation_with_retry(
+                            conversation_id, updated_conversation, max_retries=3
+                        )
+                        
+                        if save_success:
+                            # Add messages within the requested date range to result
+                            range_messages = []
+                            for msg_id, msg in updated_conversation.get("messages", {}).items():
+                                if "date" in msg:
+                                    try:
+                                        msg_date = from_isoformat(msg["date"])
+                                        if start_datetime <= msg_date <= end_datetime:
+                                            range_messages.append(msg)
+                                    except ValueError:
+                                        self.logger.warning({
+                                            "action": "INVALID_MESSAGE_DATE",
+                                            "message": f"Invalid date in message {msg_id}",
+                                            "data": {"message_id": msg_id, "date": msg.get("date")}
+                                        })
+                            
+                            result["conversations"][conversation_id] = range_messages
+                        
+                    except Exception as e:
+                        self.logger.error({
+                            "action": "INCREMENTAL_UPDATE_FAILED",
+                            "message": f"Failed to update conversation incrementally: {str(e)}",
+                            "data": {
+                                "conversation_id": conversation_id,
+                                "error": str(e),
+                                "error_type": type(e).__name__
+                            }
+                        })
+                        
+                else:
+                    # Not using incremental fetching or no overlap with date range
+                    self.logger.info({
+                        "action": "FULL_FETCH_DATE_RANGE",
+                        "message": f"Doing full fetch for date range: {conv_metadata['name']}",
+                        "data": {
+                            "conversation_id": conversation_id,
+                            "conversation_name": conv_metadata["name"],
+                            "start_date": start_date,
+                            "end_date": end_date
+                        }
+                    })
+                    
+                    # Get messages in date range
+                    messages = await self._get_messages_in_date_range(
+                        client, 
+                        int(conversation_id), 
+                        start_date, 
+                        end_date
+                    )
+                    
+                    # Skip if no messages in this range
+                    if not messages:
+                        self.logger.info({
+                            "action": "NO_MESSAGES_IN_RANGE",
+                            "message": f"No messages in date range for conversation {conversation_id}",
+                            "data": {
+                                "conversation_id": conversation_id,
+                                "start_date": start_date,
+                                "end_date": end_date
+                            }
+                        })
+                        continue
+                    
+                    # Add conversation metadata to each message
+                    for message in messages:
+                        message["conversation_name"] = conv_metadata["name"]
+                        message["conversation_username"] = conv_metadata.get("username")
+                        message["source"] = "telegram"
+                        message["is_group"] = conv_metadata.get("is_group", False)
+                        message["chat_type"] = conv_metadata.get("chat_type", "private")
+                    
+                    # Create conversation data structure for storage
+                    storage_conversation = {
+                        "metadata": conv_metadata,
+                        "messages": {str(msg["id"]): msg for msg in messages}
+                    }
+                    
+                    # Add conversation type metadata
+                    storage_conversation = add_conversation_type_metadata(
+                        {"temp_id": storage_conversation}
+                    )["temp_id"]
+                    
+                    # Save the conversation
+                    save_success = await self._save_conversation_with_retry(conversation_id, storage_conversation)
+                    
+                    if save_success:
+                        # Only add to result if save was successful
+                        result["conversations"][conversation_id] = messages
                 
                 # Add delay to avoid rate limiting
                 await asyncio.sleep(self._request_delay)
@@ -1275,7 +1762,7 @@ class TelegramIngestor(Ingestor):
         # Execute with a fresh client
         return await self._with_client(fetch_operation)
 
-    async def _fetch_messages_in_batches(self, client: TelegramClient, entity, total_limit: int) -> List[Any]:
+    async def _fetch_messages_in_batches(self, client: TelegramClient, entity, total_limit: int, min_id: Optional[int] = None) -> List[Any]:
         """
         Fetch messages in batches to manage rate limiting and memory usage.
         
@@ -1283,6 +1770,7 @@ class TelegramIngestor(Ingestor):
             client: Connected TelegramClient
             entity: Telegram entity (user, chat, or channel) to fetch messages from
             total_limit: Maximum number of messages to fetch (-1 for all available)
+            min_id: Minimum message ID to include (exclusive) - used for incremental fetching
             
         Returns:
             List of Telegram Message objects
@@ -1298,7 +1786,8 @@ class TelegramIngestor(Ingestor):
                 "entity_id": getattr(entity, 'id', 'unknown'),
                 "total_limit": total_limit,
                 "batch_size": batch_size,
-                "delay": delay
+                "delay": delay,
+                "min_id": min_id
             }
         })
         
@@ -1307,6 +1796,7 @@ class TelegramIngestor(Ingestor):
         batch_count = 0
         retry_count = 0
         max_retries = 5
+        min_id = 0 if min_id is None else min_id
         base_delay = self._request_delay
         
         while True:
@@ -1324,7 +1814,8 @@ class TelegramIngestor(Ingestor):
                 batch = await client.get_messages(
                     entity, 
                     limit=current_limit,
-                    offset_id=offset_id
+                    offset_id=offset_id,
+                    min_id=min_id
                 )
                 
                 # Reset retry count after successful fetch
@@ -1339,7 +1830,10 @@ class TelegramIngestor(Ingestor):
                     self.logger.info({
                         "action": "FETCH_MESSAGES_BATCH_EMPTY",
                         "message": "No more messages to fetch, reached end",
-                        "data": {"total_fetched": len(all_messages)}
+                        "data": {
+                            "total_fetched": len(all_messages),
+                            "min_id": min_id
+                        }
                     })
                     break
                 
