@@ -2,7 +2,7 @@
 """
 Command-line controller for running the orchestrator.
 
-This script initializes and runs the DefaultOrchestrator,
+This script initializes and runs the QueryOrchestrator,
 providing a command-line interface for interacting with it.
 """
 
@@ -27,23 +27,23 @@ except ImportError as e:
     print(f"Warning: Could not load environment variables: {e}")
 
 try:
-    from ici.adapters.orchestrators import DefaultOrchestrator
-    # print("Successfully imported DefaultOrchestrator")
+    from ici.adapters.orchestrators import QueryOrchestrator
+    # print("Successfully imported QueryOrchestrator")
 except ImportError as e:
-    print(f"Error importing DefaultOrchestrator: {e}")
+    print(f"Error importing QueryOrchestrator: {e}")
     traceback.print_exc()
     sys.exit(1)
 
 async def command_line_controller():
     """
-    Initialize the DefaultOrchestrator and provide a CLI interface.
+    Initialize the QueryOrchestrator and provide a CLI interface.
     """
-    print("Initializing DefaultOrchestrator...")
+    print("Initializing QueryOrchestrator...")
     try:
-        orchestrator = DefaultOrchestrator()
-        # print("Created DefaultOrchestrator instance")
+        orchestrator = QueryOrchestrator()
+        # print("Created QueryOrchestrator instance")
     except Exception as e:
-        print(f"Error creating DefaultOrchestrator: {e}")
+        print(f"Error creating QueryOrchestrator: {e}")
         traceback.print_exc()
         return 1
     
@@ -135,7 +135,7 @@ async def command_line_controller():
     return 0
 
 
-async def shutdown(orchestrator: DefaultOrchestrator):
+async def shutdown(orchestrator: QueryOrchestrator):
     """
     Handle graceful shutdown of the application.
     """

@@ -2,7 +2,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from typing import Dict, Any
 from pydantic import BaseModel
-from ici.adapters.orchestrators.default_orchestrator import DefaultOrchestrator
+from ici.adapters.orchestrators.query_orchestrator import QueryOrchestrator
 
 app = FastAPI(title="ICI Core API", description="API for ICI Core functionality")
 
@@ -22,7 +22,7 @@ class ContextRequest(BaseModel):
 
 class APIController:
     def __init__(self):
-        self.orchestrator = DefaultOrchestrator()
+        self.orchestrator = QueryOrchestrator()
         self._is_initialized = False
         self._setup_routes()
 
