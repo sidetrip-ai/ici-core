@@ -42,7 +42,9 @@ async def main():
         await controller.initialize()
         
         # Start the background ingestion process
+        print("Starting ingestion service")
         await controller.start()
+        print("Ingestion service started successfully")
         
         logger.info({
             "action": "INGEST_SERVICE_STARTED",
