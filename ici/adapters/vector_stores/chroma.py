@@ -168,6 +168,7 @@ class ChromaDBStore(VectorStore):
             
             # Initialize the ChromaDB client
             self._client = chromadb.PersistentClient(path=self._persist_directory)
+            self._client.as_retriever()
 
             # Mark as initialized *after* client is created
             self._is_initialized = True

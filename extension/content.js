@@ -382,9 +382,111 @@ async function interceptSubmission(event) {
       elements.textarea.style.height = elements.textarea.scrollHeight + 'px';
     } else if (elements.textarea.getAttribute('contenteditable') === 'true') {
       // For contenteditable elements like ProseMirror
-      elements.textarea.textContent = '';
-      elements.textarea.dispatchEvent(new Event('input', { bubbles: true }));
-      elements.textarea.textContent = enhancedPrompt;
+      debugLog('Handling contenteditable element with newline preservation');
+      
+      // Detect if it's a ProseMirror instance
+      const isProseMirror = isProseMirrorElement(elements.textarea);
+      debugLog('Element appears to be ProseMirror:', isProseMirror);
+      
+      // Count newlines in original text for logging
+      const originalNewlineCount = (enhancedPrompt.match(/\n/g) || []).length;
+      debugLog('Original text has ' + originalNewlineCount + ' newlines');
+      
+      let insertionSuccessful = false;
+      
+      // Try ProseMirror-specific method first if applicable
+      if (isProseMirror) {
+        try {
+          insertionSuccessful = insertTextIntoProseMirror(elements.textarea, enhancedPrompt);
+          if (insertionSuccessful) {
+            debugLog('Successfully inserted text using ProseMirror-specific method');
+          }
+        } catch (proseMirrorError) {
+          debugLog('ProseMirror-specific method failed:', proseMirrorError.message);
+        }
+      }
+      
+      // If ProseMirror-specific method failed or wasn't applicable, try generic approaches
+      if (!insertionSuccessful) {
+        // Try the primary approach: <br> tags with innerHTML
+        try {
+          // Clear existing content
+          elements.textarea.innerHTML = '';
+          elements.textarea.dispatchEvent(new Event('input', { bubbles: true }));
+          
+          // Convert newlines to <br> tags and set innerHTML
+          const formattedText = enhancedPrompt.replace(/\n/g, '<br>');
+          elements.textarea.innerHTML = formattedText;
+          
+          // Dispatch additional events to ensure the editor recognizes the change
+          elements.textarea.dispatchEvent(new Event('input', { bubbles: true }));
+          elements.textarea.dispatchEvent(new Event('change', { bubbles: true }));
+          
+          // Verify if newlines were preserved
+          const brTags = elements.textarea.innerHTML.match(/<br>/g) || [];
+          debugLog('After insertion, element has ' + brTags.length + ' <br> tags');
+          
+          // If we lost newlines, throw an error to try alternative approach
+          if (brTags.length < originalNewlineCount * 0.5) {
+            throw new Error('Newlines not properly preserved with <br> tags');
+          }
+          
+          debugLog('Successfully inserted text with <br> tags');
+          insertionSuccessful = true;
+        } catch (error) {
+          debugLog('Primary approach failed:', error.message);
+          
+          // Try second approach: paragraph elements
+          if (!insertionSuccessful) {
+            try {
+              debugLog('Trying paragraph elements approach');
+              insertTextWithParagraphs(elements.textarea, enhancedPrompt);
+              
+              // Verify
+              const brTags = elements.textarea.innerHTML.match(/<br>/g) || [];
+              const paragraphs = elements.textarea.querySelectorAll('p').length;
+              debugLog('After paragraph insertion: ' + brTags.length + ' <br> tags, ' + paragraphs + ' paragraphs');
+              
+              if ((brTags.length + paragraphs) < originalNewlineCount * 0.5) {
+                throw new Error('Newlines not properly preserved with paragraphs');
+              }
+              
+              debugLog('Successfully inserted text with paragraph elements');
+              insertionSuccessful = true;
+            } catch (secondError) {
+              debugLog('Second approach failed:', secondError.message);
+            }
+          }
+          
+          // Try third approach: simulated typing (async)
+          if (!insertionSuccessful) {
+            debugLog('Trying simulated typing approach');
+            try {
+              // Start typing simulation but don't wait for it to complete
+              setTimeout(async () => {
+                try {
+                  await insertTextAsTyping(elements.textarea, enhancedPrompt);
+                  debugLog('Successfully inserted text with simulated typing');
+                } catch (typingError) {
+                  debugLog('All approaches failed, falling back to textContent');
+                  elements.textarea.textContent = enhancedPrompt;
+                }
+              }, 0);
+              
+              // Consider it successful for now since we've started the process
+              insertionSuccessful = true;
+            } catch (typingSetupError) {
+              debugLog('Failed to set up typing simulation:', typingSetupError.message);
+            }
+          }
+        }
+        
+        // Final fallback if all else failed
+        if (!insertionSuccessful) {
+          debugLog('All insertion methods failed, falling back to basic textContent');
+          elements.textarea.textContent = enhancedPrompt;
+        }
+      }
     }
 
     // Force the input event and other necessary events to make sure ChatGPT recognizes the new content
@@ -1347,13 +1449,34 @@ async function waitForSubmitButton(maxAttempts = 10, delayMs = 200) {
 
     // If button exists and is clickable, we're done
     if (elements.buttonExists && !elements.isButtonDisabled) {
+      // If we're using contenteditable, verify that newlines are visible in the editor
+      // before proceeding with submission
+      if (elements.textarea && elements.textarea.getAttribute('contenteditable') === 'true') {
+        const textContent = elements.textarea.innerHTML || '';
+        const brTagCount = (textContent.match(/<br>/g) || []).length;
+        const paragraphCount = elements.textarea.querySelectorAll('p').length;
+        
+        debugLog(`Editor content check: ${brTagCount} <br> tags, ${paragraphCount} paragraphs`);
+        
+        // If there are almost no <br> tags or paragraphs but there should be newlines,
+        // we may need to wait a bit longer for the editor to fully process the input
+        if (brTagCount < 2 && paragraphCount < 2 && DEBUG) {
+          debugLog('Warning: Few newlines detected in editor, newline preservation may have failed');
+          // In debug mode, we'll still proceed, otherwise we'll wait for more attempts
+          if (!DEBUG) {
+            await new Promise(resolve => setTimeout(resolve, delayMs));
+            continue;
+          }
+        }
+      }
+      
       debugLog(`Submit button found and clickable after ${attempts} attempts`);
       return {
         success: true,
         elements: elements
       };
     }
-
+    
     // If textarea has no content, button won't appear
     if (!elements.hasContent) {
       debugLog('Textarea has no content, submit button will not appear');
@@ -1487,4 +1610,160 @@ function setupButtonObserver() {
 
   debugLog('Button observer setup complete');
   return observer;
+}
+
+// Function to simulate typing for contenteditable elements
+async function insertTextAsTyping(element, text) {
+  debugLog('Attempting to insert text by simulating typing');
+  
+  // Clear existing content
+  element.innerHTML = '';
+  element.dispatchEvent(new Event('input', { bubbles: true }));
+  
+  // Focus the element
+  element.focus();
+  
+  // Insert text character by character with proper newlines
+  for (let i = 0; i < text.length; i++) {
+    const char = text.charAt(i);
+    
+    if (char === '\n') {
+      // Simulate Enter key for newlines
+      element.dispatchEvent(new KeyboardEvent('keydown', {
+        key: 'Enter',
+        code: 'Enter',
+        keyCode: 13,
+        which: 13,
+        bubbles: true
+      }));
+    } else {
+      // Insert regular character
+      document.execCommand('insertText', false, char);
+    }
+    
+    // Small delay every 100 characters to ensure editor processes
+    if (i % 100 === 0) {
+      await new Promise(resolve => setTimeout(resolve, 5));
+    }
+  }
+  
+  // Final input event
+  element.dispatchEvent(new Event('input', { bubbles: true }));
+  debugLog('Finished simulating typing');
+}
+
+// Alternative approach using paragraph elements for rich text editors
+function insertTextWithParagraphs(element, text) {
+  debugLog('Attempting to insert text using paragraph elements');
+  
+  // Clear existing content
+  element.innerHTML = '';
+  element.dispatchEvent(new Event('input', { bubbles: true }));
+  
+  // Create proper paragraph elements for each line
+  const paragraphs = text.split('\n');
+  const fragment = document.createDocumentFragment();
+  
+  paragraphs.forEach((paragraph, index) => {
+    if (paragraph.trim() === '') {
+      // Empty line - just add a <br>
+      fragment.appendChild(document.createElement('br'));
+    } else {
+      // Create a paragraph element
+      const p = document.createElement('p');
+      p.textContent = paragraph;
+      fragment.appendChild(p);
+      
+      // Add a line break between paragraphs (except last one)
+      if (index < paragraphs.length - 1) {
+        fragment.appendChild(document.createElement('br'));
+      }
+    }
+  });
+  
+  // Replace content
+  element.innerHTML = '';
+  element.appendChild(fragment);
+  
+  // Dispatch necessary events
+  element.dispatchEvent(new Event('input', { bubbles: true }));
+  element.dispatchEvent(new Event('change', { bubbles: true }));
+  
+  debugLog('Finished inserting text using paragraph elements');
+}
+
+// Function to check if the element is a ProseMirror instance
+function isProseMirrorElement(element) {
+  return element.classList.contains('ProseMirror') || 
+         element.closest('.ProseMirror') !== null ||
+         element.id === 'prompt-textarea';
+}
+
+// Function specifically for ProseMirror editors
+function insertTextIntoProseMirror(element, text) {
+  debugLog('Using ProseMirror-specific insertion method');
+
+  try {
+    // First attempt to get the ProseMirror instance
+    let view = null;
+    
+    // ProseMirror often attaches its view to the DOM node
+    if (element._pmView) {
+      view = element._pmView;
+      debugLog('Found ProseMirror view via _pmView property');
+    }
+    
+    // If we can access the ProseMirror view, use its methods
+    if (view) {
+      // Clear the editor
+      const tr = view.state.tr.deleteRange(0, view.state.doc.content.size);
+      view.dispatch(tr);
+      
+      // Split the text into paragraphs
+      const paragraphs = text.split('\n');
+      
+      // Build the document with proper paragraph nodes
+      let content = '';
+      paragraphs.forEach((paragraph) => {
+        content += '<p>' + paragraph + '</p>';
+      });
+      
+      // Insert the HTML
+      // This uses ProseMirror's ability to parse HTML
+      const dom = new DOMParser().parseFromString(content, 'text/html');
+      view.dispatch(view.state.tr.replaceWith(0, 0, 
+        view.state.schema.node('doc', null, view.state.schema.nodeFromDOM(dom.body))));
+      
+      debugLog('Successfully inserted content via ProseMirror view');
+      return true;
+    }
+    
+    // If we can't access the view directly, use a generic approach
+    // that works for many ProseMirror instances
+    
+    // Clear content
+    element.innerHTML = '';
+    
+    // Create HTML content with proper paragraph structure
+    let html = '';
+    text.split('\n').forEach(line => {
+      if (line.trim() === '') {
+        html += '<p><br></p>'; // Empty line
+      } else {
+        html += '<p>' + line + '</p>';
+      }
+    });
+    
+    // Set the content
+    element.innerHTML = html;
+    
+    // Force update
+    element.dispatchEvent(new InputEvent('input', { bubbles: true, cancelable: true }));
+    
+    debugLog('Inserted content using ProseMirror-compatible HTML structure');
+    return true;
+  } catch (error) {
+    debugLog('ProseMirror insertion failed:', error);
+    return false;
+  }
 } 

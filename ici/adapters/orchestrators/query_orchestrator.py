@@ -267,6 +267,11 @@ class QueryOrchestrator(Orchestrator):
             # Step 5: Build prompt with documents and query
             prompt = await self._prompt_builder.build_prompt(query, documents)
             
+
+            print("--------------------------------")
+            print("Prompt: ", prompt)
+            print("--------------------------------")
+            
             # Step 6: Generate response
             response = await self._generate_response(prompt)
             
@@ -376,6 +381,10 @@ class QueryOrchestrator(Orchestrator):
             
             # Step 5: Build prompt with documents and query
             prompt = await self._prompt_builder.build_prompt(query, documents)
+
+            print("--------------------------------")
+            print("Prompt: ", prompt)
+            print("--------------------------------")
             
             # Log completion time
             return {
@@ -531,6 +540,12 @@ class QueryOrchestrator(Orchestrator):
                         "message": f"Using collection '{collection_name}' for source '{source}'",
                         "data": {"source": source, "collection_name": collection_name}
                     })
+
+                print("--------------------------------")
+                print("expanded query: ", expanded_query)
+                print("--------------------------------")
+                print("collection name: ", collection_name)
+                print("--------------------------------")
                 
                 # Perform semantic search for this expanded query
                 semantic_results = await self._vector_store.search(
@@ -539,6 +554,10 @@ class QueryOrchestrator(Orchestrator):
                     filters=None,
                     collection_name=collection_name
                 )
+
+                print("--------------------------------")
+                print("semantic results: ", semantic_results)
+                print("--------------------------------")
                 
                 # Add to combined results
                 all_semantic_results.append(semantic_results)
@@ -546,11 +565,17 @@ class QueryOrchestrator(Orchestrator):
                 # Optional: Perform keyword search if available
                 try:
                     if hasattr(self._vector_store, "keyword_search_async"):
+                        print("--------------------------------")
+                        print("keyword search async")
+                        print("--------------------------------")
                         # Use the async version that waits for indexing to complete
                         keyword_results = await self._vector_store.keyword_search_async(
                             query=expanded_query,
                             num_results=max(5, top_k)
                         )
+                        print("--------------------------------")
+                        print("keyword results: ", keyword_results)
+                        print("--------------------------------")
                         all_keyword_results.append(keyword_results)
                     elif hasattr(self._vector_store, "keyword_search"):
                         # Fallback to synchronous version
@@ -580,10 +605,20 @@ class QueryOrchestrator(Orchestrator):
                 [flattened_semantic, flattened_keyword], 
                 k=60  # RRF constant
             )
+
+            print("--------------------------------")
+            print("combined results: ", combined_results)
+            print("--------------------------------")
             
             # Apply similarity threshold filtering
             filtered_results = []
+            print("--------------------------------")
+            print("Starting similarity threshold filtering")
+            print("--------------------------------")
             for doc in combined_results:
+                print("--------------------------------")
+                print("doc: ", doc)
+                print("--------------------------------")
                 # Skip documents with no score or below threshold
                 if "score" not in doc or doc["score"] is None:
                     continue
@@ -595,7 +630,7 @@ class QueryOrchestrator(Orchestrator):
                 if len(filtered_results) >= top_k:
                     break
             
-            self.logger.info({
+            self.logger.warning({
                 "action": "ORCHESTRATOR_SEARCH_RESULTS",
                 "message": "Search results",
                 "data": {
@@ -870,80 +905,80 @@ class QueryOrchestrator(Orchestrator):
         """
         expanded_queries = [query]  # Always include the original query
         
-        try:
-            # If LLM generator exists, use it for sophisticated expansions
-            if hasattr(self, '_generator') and self._generator:
-                expansion_prompt = f"""Generate three alternative versions of the following query to improve document retrieval.
+#         try:
+#             # If LLM generator exists, use it for sophisticated expansions
+#             if hasattr(self, '_generator') and self._generator:
+#                 expansion_prompt = f"""Generate three alternative versions of the following query to improve document retrieval.
                 
-Original Query: {query}
+# Original Query: {query}
 
-Instructions:
-1. Rephrase the query in different ways while preserving the core intent
-2. Use synonyms for key terms
-3. Make one version more specific and one more general
-4. Format as a numbered list with no additional text
+# Instructions:
+# 1. Rephrase the query in different ways while preserving the core intent
+# 2. Use synonyms for key terms
+# 3. Make one version more specific and one more general
+# 4. Format as a numbered list with no additional text
 
-Example:
-1. [rephrased query 1]
-2. [rephrased query 2]
-3. [rephrased query 3]
-"""
+# Example:
+# 1. [rephrased query 1]
+# 2. [rephrased query 2]
+# 3. [rephrased query 3]
+# """
                 
-                try:
-                    result = await self._generator.generate(expansion_prompt)
+#                 try:
+#                     result = await self._generator.generate(expansion_prompt)
                     
-                    # Extract expanded queries from the result
-                    lines = [line.strip() for line in result.split('\n') if line.strip()]
-                    for line in lines:
-                        # Extract the query part after any numbering (e.g., "1. query" -> "query")
-                        if re.match(r'^\d+\.', line):
-                            expanded_query = re.sub(r'^\d+\.\s*', '', line)
-                            if expanded_query and expanded_query not in expanded_queries:
-                                expanded_queries.append(expanded_query)
+#                     # Extract expanded queries from the result
+#                     lines = [line.strip() for line in result.split('\n') if line.strip()]
+#                     for line in lines:
+#                         # Extract the query part after any numbering (e.g., "1. query" -> "query")
+#                         if re.match(r'^\d+\.', line):
+#                             expanded_query = re.sub(r'^\d+\.\s*', '', line)
+#                             if expanded_query and expanded_query not in expanded_queries:
+#                                 expanded_queries.append(expanded_query)
                     
-                    self.logger.info({
-                        "action": "ORCHESTRATOR_QUERY_EXPANSION",
-                        "message": "Generated expanded queries using LLM",
-                        "data": {"original": query, "expanded": expanded_queries}
-                    })
+#                     self.logger.info({
+#                         "action": "ORCHESTRATOR_QUERY_EXPANSION",
+#                         "message": "Generated expanded queries using LLM",
+#                         "data": {"original": query, "expanded": expanded_queries}
+#                     })
                     
-                except Exception as e:
-                    self.logger.warning({
-                        "action": "ORCHESTRATOR_QUERY_EXPANSION_ERROR",
-                        "message": f"Failed to expand query with LLM: {str(e)}",
-                        "data": {"error": str(e)}
-                    })
+#                 except Exception as e:
+#                     self.logger.warning({
+#                         "action": "ORCHESTRATOR_QUERY_EXPANSION_ERROR",
+#                         "message": f"Failed to expand query with LLM: {str(e)}",
+#                         "data": {"error": str(e)}
+#                     })
             
-            # Basic query expansion methods (if LLM expansion failed or wasn't available)
-            if len(expanded_queries) <= 1:
-                # Remove question words
-                question_words = ["what", "who", "where", "when", "why", "how", "is", "are", "can", "could", "would", "should"]
+#             # Basic query expansion methods (if LLM expansion failed or wasn't available)
+#             if len(expanded_queries) <= 1:
+#                 # Remove question words
+#                 question_words = ["what", "who", "where", "when", "why", "how", "is", "are", "can", "could", "would", "should"]
                 
-                # Simple rephrasing by removing question words
-                for word in question_words:
-                    pattern = rf'\b{word}\b\s+'
-                    simplified = re.sub(pattern, '', query, flags=re.IGNORECASE)
-                    if simplified != query and simplified not in expanded_queries:
-                        expanded_queries.append(simplified)
+#                 # Simple rephrasing by removing question words
+#                 for word in question_words:
+#                     pattern = rf'\b{word}\b\s+'
+#                     simplified = re.sub(pattern, '', query, flags=re.IGNORECASE)
+#                     if simplified != query and simplified not in expanded_queries:
+#                         expanded_queries.append(simplified)
                 
-                # Add some context-related terms
-                expanded_queries.append(f"information about {query}")
+#                 # Add some context-related terms
+#                 expanded_queries.append(f"information about {query}")
                 
-                self.logger.info({
-                    "action": "ORCHESTRATOR_QUERY_EXPANSION",
-                    "message": "Generated expanded queries using rules",
-                    "data": {"original": query, "expanded": expanded_queries}
-                })
+#                 self.logger.info({
+#                     "action": "ORCHESTRATOR_QUERY_EXPANSION",
+#                     "message": "Generated expanded queries using rules",
+#                     "data": {"original": query, "expanded": expanded_queries}
+#                 })
         
-        except Exception as e:
-            self.logger.warning({
-                "action": "ORCHESTRATOR_QUERY_EXPANSION_ERROR",
-                "message": f"Error in query expansion: {str(e)}",
-                "data": {"error": str(e)}
-            })
-            # Ensure we at least return the original query
-            if not expanded_queries:
-                expanded_queries = [query]
+#         except Exception as e:
+#             self.logger.warning({
+#                 "action": "ORCHESTRATOR_QUERY_EXPANSION_ERROR",
+#                 "message": f"Error in query expansion: {str(e)}",
+#                 "data": {"error": str(e)}
+#             })
+#             # Ensure we at least return the original query
+#             if not expanded_queries:
+#                 expanded_queries = [query]
         
         return expanded_queries 
     

@@ -257,6 +257,15 @@ class FileIngestOrchestrator(Orchestrator):
                     "batch_size": batch_size
                 }
             })
+
+            if len(files_to_process) == 0:
+                self.logger.info({
+                    "action": "FILE_ORCHESTRATOR_NO_FILES_TO_PROCESS",
+                    "message": "No files to process"
+                })
+                print("--------------------------------")
+                print("No files to process")
+                print("--------------------------------")
             
             # Process each file
             for file_id in files_to_process:

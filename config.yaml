@@ -91,7 +91,51 @@ orchestrator:
   prompt_builder:
     error_template: 'Unable to process: {error}'
     fallback_template: 'Answer based on general knowledge: {question}'
-    template: "Context:\n{context}\n\nQuestion: {question}\n\nYour response should be conversational and helpful. Remember to continue from any previous conversation if relevant."
+    template: |
+      # Retrieval-Augmented Response Instructions
+      
+      ## How to Understand This Prompt
+      {understanding_instructions}
+      
+      ## How to Read Context Messages
+      {reading_instructions}
+      
+      ## Message Direction Guidelines
+      {direction_instructions}
+      
+      ## Relevant Context
+      {context}
+      
+      ## Question
+      {question}
+    
+    # Instruction sections
+    instructions:
+      understanding: |
+        This prompt contains contextual information followed by a question. Your task is to answer the question based on the provided context. The context includes messages from various sources, structured by conversations and participants.
+      
+      reading: |
+        Each message follows this format:
+        - **Source**: The origin of the message (chat group, conversation)
+        - **Author**: Who wrote the message
+        - **Timestamp**: When the message was sent
+        - **Previous Message ID**: Reference to the message that came before (if available)
+        - **Next Message ID**: Reference to the message that follows (if available)
+        - **Content**: The actual message text
+        
+        Messages are grouped under headings showing their Message ID for clarity.
+        When a message shows a Previous/Next Message ID that isn't included in the context, it indicates parts of the conversation are not shown.
+      
+      direction: |
+        Pay close attention to message recipients and authorship:
+        - Each message will be under correct conversation ID or chat name. It can happen that when I'm chatting with a friend via DM, the conversation name or ID is my friend name and the author is also my friend. Ensure we are not mixing up conversations and authors.
+        - Messages with author "Me" are written by me, the current user asking the question
+        - Messages with any other author are written by someone else
+        - Content may include tags like "@username" or "@userId" referencing specific users
+        - All of these terms refer to me, the current user: {user_reference_terms}
+        - If a message has tags that don't match any of these terms, the message is directed to someone else
+        - Use message metadata and content to determine the conversation flow and direction
+    
     # User reference settings
     user_reference:
       enabled: true
