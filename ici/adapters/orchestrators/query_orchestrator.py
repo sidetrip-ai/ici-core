@@ -613,22 +613,9 @@ class QueryOrchestrator(Orchestrator):
             # Apply similarity threshold filtering
             filtered_results = []
             print("--------------------------------")
-            print("Starting similarity threshold filtering")
+            print("getting top k results from combined results")
             print("--------------------------------")
-            for doc in combined_results:
-                print("--------------------------------")
-                print("doc: ", doc)
-                print("--------------------------------")
-                # Skip documents with no score or below threshold
-                if "score" not in doc or doc["score"] is None:
-                    continue
-                    
-                if doc["score"] >= self._similarity_threshold:
-                    filtered_results.append(doc)
-                    
-                # Break if we have enough results
-                if len(filtered_results) >= top_k:
-                    break
+            filtered_results = combined_results[:top_k]
             
             self.logger.warning({
                 "action": "ORCHESTRATOR_SEARCH_RESULTS",
