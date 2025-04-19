@@ -1,0 +1,84 @@
+{
+  "data": [
+    {
+      "name": "Comfort Kitchen",
+      "description": "Cozy restaurant serving healthy comfort food with vegetarian and vegan options.",
+      "location": "downtown",
+      "price_range": "$$",
+      "cuisine": "American",
+      "link": "https://maps.google.com/?q=Comfort+Kitchen"
+    },
+    {
+      "name": "Spice Garden",
+      "description": "Authentic Indian cuisine with a variety of spice levels to suit your mood.",
+      "location": "midtown",
+      "price_range": "$$",
+      "cuisine": "Indian",
+      "link": "https://maps.google.com/?q=Spice+Garden"
+    },
+    {
+      "name": "Fresh Start Cafe",
+      "description": "Healthy breakfast and lunch options with fresh juices and smoothies.",
+      "location": "downtown",
+      "price_range": "$",
+      "cuisine": "Cafe",
+      "link": "https://maps.google.com/?q=Fresh+Start+Cafe"
+    },
+    {
+      "name": "Golden Dragon",
+      "description": "Traditional Chinese restaurant with extensive menu and fast delivery.",
+      "location": "chinatown",
+      "price_range": "$$",
+      "cuisine": "Chinese",
+      "link": "https://maps.google.com/?q=Golden+Dragon"
+    },
+    {
+      "name": "Pasta Paradise",
+      "description": "Family-owned Italian restaurant with homemade pasta and wood-fired pizza.",
+      "location": "uptown",
+      "price_range": "$$$",
+      "cuisine": "Italian",
+      "link": "https://maps.google.com/?q=Pasta+Paradise"
+    },
+    {
+      "name": "Quick Bites",
+      "description": "Fast casual restaurant with healthy options ready in minutes.",
+      "location": "downtown",
+      "price_range": "$",
+      "cuisine": "Fast Food",
+      "link": "https://maps.google.com/?q=Quick+Bites"
+    },
+    {
+      "name": "Taco Fiesta",
+      "description": "Authentic Mexican tacos and burritos with house-made salsas.",
+      "location": "eastside",
+      "price_range": "$",
+      "cuisine": "Mexican",
+      "link": "https://maps.google.com/?q=Taco+Fiesta"
+    },
+    {
+      "name": "Zen Sushi",
+      "description": "Japanese restaurant with fresh sushi and a calm, relaxing atmosphere.",
+      "location": "midtown",
+      "price_range": "$$$",
+      "cuisine": "Japanese",
+      "link": "https://maps.google.com/?q=Zen+Sushi"
+    },
+    {
+      "name": "The Hungry Scholar",
+      "description": "Cozy cafe near campus with student discounts and great coffee.",
+      "location": "university district",
+      "price_range": "$",
+      "cuisine": "Cafe",
+      "link": "https://maps.google.com/?q=The+Hungry+Scholar"
+    },
+    {
+      "name": "Comfort Bowl",
+      "description": "Build-your-own healthy grain bowls with plenty of protein options.",
+      "location": "downtown",
+      "price_range": "$$",
+      "cuisine": "Health Food",
+      "link": "https://maps.google.com/?q=Comfort+Bowl"
+    }
+  ]
+}

@@ -1,0 +1,124 @@
+{
+  "data": [
+    {
+      "name": "National Suicide Prevention Lifeline (US)",
+      "phone": "988 or 1-800-273-8255",
+      "description": "24/7, free and confidential support for people in distress, prevention and crisis resources for you or your loved ones",
+      "hours": "24/7",
+      "issue_tags": ["suicidal", "crisis", "general", "mental_health"],
+      "link": "https://suicidepreventionlifeline.org/"
+    },
+    {
+      "name": "Crisis Text Line (US)",
+      "phone": "Text HOME to 741741",
+      "description": "Free 24/7 support with a trained Crisis Counselor via text messaging",
+      "hours": "24/7",
+      "issue_tags": ["crisis", "general", "mental_health", "anxiety"],
+      "link": "https://www.crisistextline.org/"
+    },
+    {
+      "name": "AASRA (India)",
+      "phone": "91-9820466726",
+      "description": "A crisis intervention center aimed at prevention of suicide and providing emotional support",
+      "hours": "24/7",
+      "issue_tags": ["suicidal", "crisis", "mental_health"],
+      "link": "http://www.aasra.info/"
+    },
+    {
+      "name": "Vandrevala Foundation (India)",
+      "phone": "1860-2662-345 or +91-9999666555",
+      "description": "24/7 helpline providing support to people experiencing emotional distress and suicidal thoughts",
+      "hours": "24/7",
+      "issue_tags": ["mental_health", "suicidal", "crisis"],
+      "link": "https://www.vandrevalafoundation.com/"
+    },
+    {
+      "name": "iCall (India)",
+      "phone": "+91-9152987821",
+      "description": "Psychosocial helpline providing counseling, information, and referrals to people in emotional distress",
+      "hours": "Monday to Saturday, 10:00 AM to 8:00 PM",
+      "issue_tags": ["mental_health", "general", "relationship_conflict"],
+      "link": "https://icallhelpline.org/"
+    },
+    {
+      "name": "NIMHANS Mental Health Helpline (India)",
+      "phone": "080-46110007",
+      "description": "National Institute of Mental Health and Neurosciences helpline for mental health support and guidance",
+      "hours": "24/7",
+      "issue_tags": ["mental_health", "general", "crisis"],
+      "link": "https://nimhans.ac.in/"
+    },
+    {
+      "name": "Roshni Trust (India)",
+      "phone": "+91-40-66202000",
+      "description": "Hyderabad-based helpline for individuals dealing with suicidal thoughts and emotional distress",
+      "hours": "11:00 AM to 9:00 PM every day",
+      "issue_tags": ["suicidal", "crisis", "emotional_distress"],
+      "link": "http://www.roshnihyd.org/"
+    },
+    {
+      "name": "Mann Talks (India)",
+      "phone": "+91-8686139139",
+      "description": "A mental wellness helpline for emotional support and crisis intervention",
+      "hours": "10:00 AM to 6:00 PM, Monday to Saturday",
+      "issue_tags": ["mental_health", "emotional_distress", "general"],
+      "link": "https://www.manntalks.org/"
+    },
+    {
+      "name": "SAMHSA's National Helpline (US)",
+      "phone": "1-800-662-4357",
+      "description": "Treatment referral and information service for individuals facing mental health or substance use disorders",
+      "hours": "24/7",
+      "issue_tags": ["substance_abuse", "mental_health", "addiction"],
+      "link": "https://www.samhsa.gov/find-help/national-helpline"
+    },
+    {
+      "name": "National Domestic Violence Hotline (US)",
+      "phone": "1-800-799-7233",
+      "description": "Support for victims and survivors of domestic violence",
+      "hours": "24/7",
+      "issue_tags": ["domestic_violence", "abuse", "relationship_conflict"],
+      "link": "https://www.thehotline.org/"
+    },
+    {
+      "name": "Women's Helpline (India)",
+      "phone": "1091 or 181",
+      "description": "National helpline for women facing violence or harassment",
+      "hours": "24/7",
+      "issue_tags": ["abuse", "domestic_violence", "harassment"],
+      "link": "https://www.wcd.nic.in/schemes/women-helpline-scheme-181"
+    },
+    {
+      "name": "Sahai Helpline (India)",
+      "phone": "+91-080-25497777",
+      "description": "Bangalore-based suicide prevention and emotional support helpline",
+      "hours": "10:00 AM to 8:00 PM, Monday to Saturday",
+      "issue_tags": ["suicidal", "emotional_distress", "crisis"],
+      "link": "https://sahaihelpline.org/"
+    },
+    {
+      "name": "Lifeline Foundation (India)",
+      "phone": "+91-33-24637401 or +91-33-24637432",
+      "description": "Kolkata-based suicide prevention helpline",
+      "hours": "10:00 AM to 6:00 PM, Monday to Friday",
+      "issue_tags": ["suicidal", "crisis", "mental_health"],
+      "link": "https://lifelinefoundation.in/"
+    },
+    {
+      "name": "TISS iCall (India)",
+      "phone": "022-25521111",
+      "description": "Professional counseling by trained mental health professionals",
+      "hours": "Monday to Saturday, 8:00 AM to 10:00 PM",
+      "issue_tags": ["general", "mental_health", "relationship_conflict", "academic_stress"],
+      "link": "https://icallhelpline.org/"
+    },
+    {
+      "name": "The Trevor Project (US)",
+      "phone": "1-866-488-7386",
+      "description": "Crisis intervention and suicide prevention for LGBTQ young people",
+      "hours": "24/7",
+      "issue_tags": ["LGBTQ", "suicidal", "youth", "identity_crisis"],
+      "link": "https://www.thetrevorproject.org/"
+    }
+  ]
+}
