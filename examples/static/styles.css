@@ -1,0 +1,109 @@
+/* Memory Finder Custom Styles */
+
+body {
+    background-color: #f9f9f9;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.app-header {
+    background-color: #3498db;
+    color: white;
+    padding: 20px 0;
+    margin-bottom: 30px;
+    border-radius: 0 0 10px 10px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+}
+
+.app-header h1 {
+    margin: 0;
+    font-weight: 600;
+}
+
+.search-form {
+    background-color: white;
+    padding: 25px;
+    border-radius: 10px;
+    box-shadow: 0 2px 15px rgba(0, 0, 0, 0.05);
+    margin-bottom: 30px;
+    border: 1px solid #eaeaea;
+}
+
+.result-card {
+    background-color: white;
+    margin-bottom: 20px;
+    border-radius: 10px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    border: 1px solid #eaeaea;
+    transition: transform 0.2s;
+}
+
+.result-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+}
+
+.result-card .card-header {
+    background-color: #f8f9fa;
+    font-weight: 600;
+    border-radius: 10px 10px 0 0;
+    padding: 15px 20px;
+    border-bottom: 1px solid #eaeaea;
+}
+
+.context-message {
+    padding: 15px;
+    border-radius: 8px;
+    margin: 8px 0;
+    border: 1px solid #e6e6e6;
+    background-color: #f9f9f9;
+}
+
+.context-message.current {
+    background-color: #e6f7ff;
+    border-color: #91d5ff;
+}
+
+mark {
+    background-color: #fff3cd;
+    padding: 0.1em 0.3em;
+    border-radius: 3px;
+    font-weight: 500;
+}
+
+.tips-section {
+    background-color: white;
+    padding: 20px;
+    border-radius: 10px;
+    box-shadow: 0 2px 15px rgba(0, 0, 0, 0.05);
+    margin-top: 40px;
+    border: 1px solid #eaeaea;
+}
+
+.tips-section h3 {
+    color: #3498db;
+    margin-bottom: 15px;
+}
+
+.tips-section ul {
+    padding-left: 20px;
+}
+
+.tips-section li {
+    margin-bottom: 8px;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .search-form {
+        padding: 15px;
+    }
+    
+    .app-header {
+        padding: 15px 0;
+    }
+}

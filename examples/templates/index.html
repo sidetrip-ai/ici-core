@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Memory Finder</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="/static/styles.css" rel="stylesheet">
+    <script>
+        // Set API base URL from environment variables
+        // This will be populated by the server
+        window.API_BASE_URL = '{{ api_base_url }}';
+    </script>
+    <style>
+        .result-card {
+            margin-bottom: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .result-card .card-header {
+            background-color: #f8f9fa;
+            font-weight: bold;
+        }
+        .metadata-section {
+            font-size: 0.9rem;
+            color: #6c757d;
+        }
+        mark {
+            background-color: #fff3cd;
+            padding: 0.1em 0.2em;
+            border-radius: 3px;
+        }
+        .context-message {
+            padding: 10px;
+            border-radius: 5px;
+            margin: 5px 0;
+            border: 1px solid #ddd;
+        }
+        .context-message.current {
+            background-color: #e6f7ff;
+        }
+        #loading-spinner {
+            display: none;
+        }
+        .search-form {
+            background-color: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="app-header">
+        <div class="container">
+            <h1>Memory Finder</h1>
+            <p class="lead mb-0">Search through your conversation history with advanced filtering and highlighting.</p>
+        </div>
+    </div>
+    
+    <div class="container mb-5">
+        
+        <!-- Search Form -->
+        <div class="search-form">
+            <form id="searchForm">
+                <div class="row mb-3">
+                    <div class="col-md-8">
+                        <label for="query" class="form-label">Search Query</label>
+                        <input type="text" class="form-control" id="query" name="query" required>
+                    </div>
+                    <div class="col-md-4">
+                        <label for="topK" class="form-label">Number of Results</label>
+                        <input type="number" class="form-control" id="topK" name="topK" value="10" min="1" max="50">
+                    </div>
+                </div>
+                
+                <div class="mb-3">
+                    <a class="btn btn-link p-0" data-bs-toggle="collapse" href="#advancedFilters" role="button">
+                        Advanced Filters
+                    </a>
+                </div>
+                
+                <div class="collapse mb-3" id="advancedFilters">
+                    <div class="card card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="conversationId" class="form-label">Conversation ID</label>
+                                    <input type="text" class="form-control" id="conversationId" name="conversationId">
+                                </div>
+                                <div class="mb-3">
+                                    <label for="sender" class="form-label">Sender</label>
+                                    <input type="text" class="form-control" id="sender" name="sender">
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">Message Direction</label>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="radio" name="outgoing" id="outgoingAny" value="" checked>
+                                        <label class="form-check-label" for="outgoingAny">Any</label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="radio" name="outgoing" id="outgoingTrue" value="true">
+                                        <label class="form-check-label" for="outgoingTrue">Outgoing</label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="radio" name="outgoing" id="outgoingFalse" value="false">
+                                        <label class="form-check-label" for="outgoingFalse">Incoming</label>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="dateFrom" class="form-label">Date From</label>
+                                    <input type="date" class="form-control" id="dateFrom" name="dateFrom">
+                                </div>
+                                <div class="mb-3">
+                                    <label for="dateTo" class="form-label">Date To</label>
+                                    <input type="date" class="form-control" id="dateTo" name="dateTo">
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">Search Type</label>
+                                    <select class="form-select" id="searchType" name="searchType">
+                                        <option value="combined" selected>Combined (Semantic + Keyword)</option>
+                                        <option value="semantic">Semantic Only</option>
+                                        <option value="keyword">Keyword Only</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <button type="submit" class="btn btn-primary">Search</button>
+                <div id="loading-spinner" class="spinner-border text-primary ms-2" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+            </form>
+        </div>
+        
+        <!-- Results Section -->
+        <div id="resultsSection" style="display: none;">
+            <h2>Search Results <span id="resultCount" class="badge bg-success">0</span></h2>
+            <div id="results" class="mt-3"></div>
+        </div>
+        
+        <!-- Context Modal -->
+        <div class="modal fade" id="contextModal" tabindex="-1" aria-labelledby="contextModalLabel" aria-hidden="true">
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="contextModalLabel">Conversation Context</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body" id="contextModalBody">
+                        <!-- Context messages will be inserted here -->
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Tips Section -->
+        <div class="mt-5">
+            <hr>
+            <h3>Tips</h3>
+            <ul>
+                <li>Use specific keywords for better results</li>
+                <li>Filter by date range to narrow down your search</li>
+                <li>Click "View Context" to see the message in its original conversation</li>
+                <li>The search uses semantic matching, so you can search for concepts, not just exact words</li>
+            </ul>
+        </div>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const searchForm = document.getElementById('searchForm');
+            const resultsSection = document.getElementById('resultsSection');
+            const resultsContainer = document.getElementById('results');
+            const resultCount = document.getElementById('resultCount');
+            const loadingSpinner = document.getElementById('loading-spinner');
+            const contextModal = new bootstrap.Modal(document.getElementById('contextModal'));
+            const contextModalBody = document.getElementById('contextModalBody');
+            
+            searchForm.addEventListener('submit', async function(e) {
+                e.preventDefault();
+                
+                // Show loading spinner
+                loadingSpinner.style.display = 'inline-block';
+                resultsSection.style.display = 'none';
+                resultsContainer.innerHTML = '';
+                
+                // Prepare search parameters
+                const formData = new FormData(searchForm);
+                const searchParams = {
+                    query: formData.get('query'),
+                    top_k: parseInt(formData.get('topK')),
+                    search_type: formData.get('searchType'),
+                };
+                
+                // Add optional parameters if they exist
+                if (formData.get('conversationId')) {
+                    searchParams.conversation_id = formData.get('conversationId');
+                }
+                
+                if (formData.get('sender')) {
+                    searchParams.sender = formData.get('sender');
+                }
+                
+                if (formData.get('outgoing')) {
+                    searchParams.outgoing = formData.get('outgoing') === 'true';
+                }
+                
+                if (formData.get('dateFrom')) {
+                    searchParams.date_from = new Date(formData.get('dateFrom')).toISOString();
+                }
+                
+                if (formData.get('dateTo')) {
+                    // Set time to end of day
+                    const dateTo = new Date(formData.get('dateTo'));
+                    dateTo.setHours(23, 59, 59, 999);
+                    searchParams.date_to = dateTo.toISOString();
+                }
+                
+                try {
+                    // Get API URL from environment or use default
+                    const apiUrl = window.API_BASE_URL || '';
+                    
+                    // Call search API
+                    const response = await fetch(`${apiUrl}/api/search`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify(searchParams),
+                    });
+                    
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    
+                    const data = await response.json();
+                    
+                    // Update result count
+                    resultCount.textContent = data.count;
+                    
+                    // Display results
+                    if (data.count > 0) {
+                        data.results.forEach((result, index) => {
+                            const resultCard = document.createElement('div');
+                            resultCard.className = 'card result-card';
+                            
+                            const resultHeader = document.createElement('div');
+                            resultHeader.className = 'card-header';
+                            resultHeader.textContent = `Result ${index + 1}: ${result.text.substring(0, 100)}...`;
+                            
+                            const resultBody = document.createElement('div');
+                            resultBody.className = 'card-body';
+                            
+                            // Create metadata section
+                            const metadataRow = document.createElement('div');
+                            metadataRow.className = 'row mb-3';
+                            
+                            const metadataCol1 = document.createElement('div');
+                            metadataCol1.className = 'col-md-6 metadata-section';
+                            metadataCol1.innerHTML = `
+                                <strong>Message Details:</strong><br>
+                                ID: ${result.id}<br>
+                                Score: ${result.score.toFixed(4)}<br>
+                                ${result.metadata.date ? `Date: ${result.metadata.date}<br>` : ''}
+                                ${result.metadata.sender ? `Sender: ${result.metadata.sender}<br>` : ''}
+                            `;
+                            
+                            const metadataCol2 = document.createElement('div');
+                            metadataCol2.className = 'col-md-6 metadata-section';
+                            metadataCol2.innerHTML = `
+                                <strong>Conversation Details:</strong><br>
+                                ${result.metadata.conversation_id ? `Conversation: ${result.metadata.conversation_id}<br>` : ''}
+                                ${result.metadata.outgoing !== undefined ? `Outgoing: ${result.metadata.outgoing ? 'Yes' : 'No'}<br>` : ''}
+                            `;
+                            
+                            // Add other metadata
+                            for (const [key, value] of Object.entries(result.metadata)) {
+                                if (!['date', 'sender', 'conversation_id', 'outgoing', 'text'].includes(key)) {
+                                    metadataCol2.innerHTML += `${key}: ${value}<br>`;
+                                }
+                            }
+                            
+                            metadataRow.appendChild(metadataCol1);
+                            metadataRow.appendChild(metadataCol2);
+                            
+                            // Create content section
+                            const contentSection = document.createElement('div');
+                            contentSection.innerHTML = `
+                                <strong>Content:</strong><br>
+                                ${result.highlighted_text || result.text}
+                            `;
+                            
+                            // Create context button
+                            const contextButton = document.createElement('button');
+                            contextButton.className = 'btn btn-sm btn-outline-primary mt-3';
+                            contextButton.textContent = 'View Context';
+                            contextButton.addEventListener('click', () => getContext(result.id));
+                            
+                            // Assemble the card
+                            resultBody.appendChild(metadataRow);
+                            resultBody.appendChild(contentSection);
+                            resultBody.appendChild(contextButton);
+                            
+                            resultCard.appendChild(resultHeader);
+                            resultCard.appendChild(resultBody);
+                            
+                            resultsContainer.appendChild(resultCard);
+                        });
+                    } else {
+                        resultsContainer.innerHTML = '<div class="alert alert-warning">No results found matching your search criteria.</div>';
+                    }
+                    
+                    // Show results section
+                    resultsSection.style.display = 'block';
+                } catch (error) {
+                    console.error('Error:', error);
+                    resultsContainer.innerHTML = `<div class="alert alert-danger">Error: ${error.message}</div>`;
+                    resultsSection.style.display = 'block';
+                } finally {
+                    // Hide loading spinner
+                    loadingSpinner.style.display = 'none';
+                }
+            });
+            
+            // Function to get conversation context
+            async function getContext(messageId) {
+                try {
+                    contextModalBody.innerHTML = '<div class="d-flex justify-content-center"><div class="spinner-border" role="status"><span class="visually-hidden">Loading...</span></div></div>';
+                    contextModal.show();
+                    
+                    // Get API URL from environment or use default
+                    const apiUrl = window.API_BASE_URL || '';
+                    
+                    const response = await fetch(`${apiUrl}/api/context/${messageId}?window=5`);
+                    
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    
+                    const data = await response.json();
+                    
+                    if (data.count > 0) {
+                        contextModalBody.innerHTML = '';
+                        
+                        data.messages.forEach(msg => {
+                            const isCurrent = msg.id === messageId;
+                            const messageDiv = document.createElement('div');
+                            messageDiv.className = `context-message ${isCurrent ? 'current' : ''}`;
+                            
+                            const metadata = msg.metadata || {};
+                            const sender = metadata.sender || 'Unknown';
+                            const date = metadata.date || 'Unknown date';
+                            
+                            messageDiv.innerHTML = `
+                                <strong>${sender} (${date}):</strong><br>
+                                ${isCurrent && msg.highlighted_text ? msg.highlighted_text : msg.text}
+                            `;
+                            
+                            contextModalBody.appendChild(messageDiv);
+                        });
+                    } else {
+                        contextModalBody.innerHTML = '<div class="alert alert-info">No conversation context available for this message.</div>';
+                    }
+                } catch (error) {
+                    console.error('Error:', error);
+                    contextModalBody.innerHTML = `<div class="alert alert-danger">Error: ${error.message}</div>`;
+                }
+            }
+        });
+    </script>
+</body>
+</html>
