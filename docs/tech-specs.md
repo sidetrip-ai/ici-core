@@ -236,8 +236,93 @@ Each component is implemented as an abstract base class (ABC) in Python, ensurin
 - **Design Choice Thesis**:  
   Abstracting the language model behind the `Generator` interface enables seamless integration of different models or providers. This design supports future enhancements (e.g., custom fine-tuned models) and ensures the system remains agnostic to model-specific details, enhancing adaptability and longevity.
 
-### 3.8 Orchestrator
-- **Purpose**: Manages the query pipeline, coordinating components from validation to response generation.
+### 3.8 Google Workspace Adapter
+- **Purpose**: Provides seamless integration with Google Workspace services (Calendar, Gmail, Docs, Drive, Tasks) for enhanced productivity features.
+- **Interface**:
+  ```python
+  from typing import Dict, Any, List
+
+  class GoogleWorkspaceAdapter:
+      async def create_calendar_event_from_meeting(meeting_details: Dict[str, Any], create_meet: bool = False) -> Dict[str, Any]:
+          """Creates a calendar event from meeting details with optional Google Meet."""
+          pass
+
+      async def create_email_draft(chat_messages: List[Dict[str, Any]], orchestrator) -> Dict[str, Any]:
+          """Creates an email draft based on chat context."""
+          pass
+
+      async def create_doc_from_summary(chat_messages: List[Dict[str, Any]], orchestrator, title: str = None) -> Dict[str, Any]:
+          """Creates a Google Doc summary from chat history."""
+          pass
+
+      async def create_task_from_message(message: str | Dict[str, Any], orchestrator) -> Dict[str, Any]:
+          """Creates a Google Task from a message by extracting task details."""
+          pass
+
+      async def create_plan_doc(chat_messages: List[Dict[str, Any]], orchestrator, plan_type: str = None) -> Dict[str, Any]:
+          """Creates a structured plan document from chat history."""
+          pass
+  ```
+- **Details**:
+  - Handles authentication and API-specific logic for Google Workspace services
+  - Supports the following Google services:
+    - Calendar: Event creation with Google Meet integration
+    - Gmail: Email draft creation
+    - Docs: Document creation and formatting
+    - Drive: File management
+    - Tasks: Task creation and management
+  - Implements robust error handling and retry logic for API calls
+  - Maintains consistent response format across all functions:
+    ```python
+    {
+        'success': bool,
+        'error': str,  # Only present if success is False
+        'data': Dict[str, Any]  # Service-specific response data
+    }
+    ```
+  - Supports configuration via environment variables:
+    - `GOOGLE_CLIENT_ID`: OAuth client ID
+    - `GOOGLE_CLIENT_SECRET`: OAuth client secret
+    - `GOOGLE_REDIRECT_URI`: OAuth redirect URI
+  - **Configuration Examples**:
+    ```yaml
+    google_workspace:
+      # OAuth Configuration
+      client_id: ${GOOGLE_CLIENT_ID}
+      client_secret: ${GOOGLE_CLIENT_SECRET}
+      redirect_uri: ${GOOGLE_REDIRECT_URI}
+      
+      # API Settings
+      calendar:
+        default_duration: 60  # minutes
+        default_reminder_minutes: 30
+        create_meet_by_default: true
+        
+      gmail:
+        default_signature: true
+        max_retries: 3
+        retry_delay: 5  # seconds
+        
+      docs:
+        default_template: "meeting_notes"
+        auto_format: true
+        max_retries: 3
+        
+      drive:
+        default_folder: "ICI Documents"
+        max_file_size: 10485760  # 10MB
+        allowed_types: ["doc", "docx", "pdf", "txt"]
+        
+      tasks:
+        default_list: "ICI Tasks"
+        default_priority: 3  # 1-5, 1 being highest
+        max_retries: 3
+    ```
+- **Design Choice Thesis**:  
+  The Google Workspace adapter provides a unified interface for Google services, abstracting away API complexities and authentication details. This modular design allows for easy integration with the orchestrator while maintaining separation of concerns. The consistent response format ensures reliable error handling and simplifies integration with other components.
+
+### 3.9 Orchestrator
+- **Purpose**: Manages the query pipeline, coordinating components from validation to response generation and Google Workspace integration.
 - **Interface**:
   ```python
   from abc import ABC, abstractmethod
@@ -248,34 +333,47 @@ Each component is implemented as an abstract base class (ABC) in Python, ensurin
       def process_query(self, input: str, user_id: str) -> str:
           """Manages query processing from validation to generation."""
           pass
+
+      @abstractmethod
+      async def _handle_schedule_command(self, user_id: str, query: str) -> str:
+          """Handles the schedule command to create calendar events."""
+          pass
+
+      @abstractmethod
+      async def _handle_email_command(self, user_id: str, query: str) -> str:
+          """Handles the email command to create email drafts."""
+          pass
+
+      @abstractmethod
+      async def _handle_doc_command(self, user_id: str, query: str) -> str:
+          """Handles the doc command to create document summaries."""
+          pass
+
+      @abstractmethod
+      async def _handle_task_command(self, user_id: str, query: str) -> str:
+          """Handles the task command to create tasks."""
+          pass
+
+      @abstractmethod
+      async def _handle_plan_command(self, user_id: str, query: str) -> str:
+          """Handles the plan command to create structured plans."""
+          pass
   ```
 - **Details**:
-  - Workflow:
-    1. Retrieves validation rules dynamically based on `user_id` from a runtime source (database, config file)
-    2. Builds context for validation based on `user_id` and runtime data
-    3. Validates input with `validator.validate(input, context, rules)`
-    4. If validation fails, returns appropriate error message
-    5. Generates query embedding with `embedder.embed(input)`
-    6. Retrieves relevant documents with `vector_store.search(query_vector, num_results, filters={'user_id': user_id})`
-    7. Constructs prompt with `prompt_builder.build_prompt(input, documents)`
-    8. Generates response with `generator.generate(prompt)`
-    9. Returns final output or error message
-  - Dynamic Rule and Context Management:
-    - Rules are fetched at runtime using methods like `get_rules(user_id)`
-    - Context is retrieved dynamically, customized to the specific user
-    - Filters for vector search include user-specific parameters 
-  - Handles errors at each step with appropriate recovery strategies:
-    - Validation failure: "Access denied: [reason]"
-    - Embedding failure: "Cannot process query at this time"
-    - Search failure: Falls back to general knowledge response
-    - Generation failure: "Failed to generate response: [reason]"
-  - Implements retry mechanisms with exponential backoff for critical operations
-  - Logs each step via the `Logger` for traceability and debugging
-  - Supports custom error messages through configuration
+  - Integrates with the Google Workspace adapter for enhanced productivity features
+  - Supports the following commands:
+    - `/schedule`: Create calendar events with Google Meet
+    - `/email`: Create email drafts
+    - `/doc`: Create document summaries
+    - `/task`: Create tasks
+    - `/plan`: Create structured plans
+  - Maintains chat history for context-aware command processing
+  - Implements robust error handling and user feedback
+  - Provides detailed response formatting with emojis and structured information
 - **Design Choice Thesis**:  
-  The `Orchestrator` centralizes query handling and rule/context management, ensuring a consistent workflow while delegating tasks to specialized components. By dynamically retrieving rules and context at runtime rather than accepting them as parameters, the system gains improved security, modularity, and real-time adaptability to user-specific data and policies. This design maintains the ability for components to be swapped or upgraded independently and enhances reliability by managing errors gracefully, critical for user-facing interactions.
+  The orchestrator's integration with Google Workspace services enhances its capabilities while maintaining a clean separation of concerns. By delegating API-specific logic to the adapter, the orchestrator can focus on coordinating the workflow and providing a consistent user experience. This design enables seamless addition of new Google Workspace features while keeping the core orchestration logic clean and maintainable.
 
-### 3.9 IngestionPipeline
+### 3.10 IngestionPipeline
 - **Purpose**: Manages the ingestion process, including scheduling, state tracking, and component coordination.
 - **Interface**:
   ```python
@@ -312,7 +410,7 @@ Each component is implemented as an abstract base class (ABC) in Python, ensurin
 - **Design Choice Thesis**:  
   Encapsulating ingestion logic in a dedicated `IngestionPipeline` ensures that data updates run independently of query handling. This separation supports continuous ingestion without impacting performance, while the scheduler provides flexibility for different data source needs, enhancing scalability and autonomy.
 
-### 3.10 Logger
+### 3.11 Logger
 - **Purpose**: Provides structured logging across all components for monitoring and debugging.
 - **Interface**:
   ```python
