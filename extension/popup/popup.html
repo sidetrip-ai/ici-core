@@ -284,6 +284,35 @@
   </div>
   
   <div class="section">
+    <h2>API Configuration</h2>
+    <div class="form-group">
+      <label for="apiUrl">API URL:</label>
+      <div class="input-group" style="display: flex; gap: 5px;">
+        <input type="text" id="apiUrl" placeholder="https://your-api-url.com/getContext" style="flex-grow: 1;">
+        <button id="checkApi" class="primary-btn" style="flex-shrink: 0;">Check</button>
+      </div>
+      <div class="info">The URL for the context enhancement API service</div>
+    </div>
+    <div id="apiStatus" class="status"></div>
+    
+    <div class="form-group">
+      <label for="maxRetries">Max Retries:</label>
+      <input type="number" id="maxRetries" min="0" max="5" value="3" style="width: 60px;">
+      <div class="info">Number of retry attempts for failed API requests</div>
+    </div>
+    
+    <div class="form-group">
+      <label for="timeout">Timeout (ms):</label>
+      <input type="number" id="timeout" min="1000" max="30000" step="1000" value="15000" style="width: 100px;">
+      <div class="info">Maximum time to wait for API response (in milliseconds)</div>
+    </div>
+    
+    <div class="buttons">
+      <button id="saveApiConfig" class="primary-btn">Save API Config</button>
+    </div>
+  </div>
+  
+  <div class="section">
     <h2>Advanced Settings</h2>
     <div class="form-group">
       <label for="formSelector">Form Selector:</label>

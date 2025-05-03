@@ -25,7 +25,7 @@
         "https://chat.openai.com/*",
         "https://chatgpt.com/*"
       ],
-      "js": ["content.js"],
+      "js": ["api-service.js", "content.js"],
       "run_at": "document_start",
       "all_frames": true
     }

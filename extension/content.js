@@ -1,5 +1,4 @@
 // Global variables
-const API_URL = "http://localhost:8000/getContext";
 const USER_ID = "admin";
 const SOURCE = "chatgpt";
 let lastErrorTime = 0;
@@ -582,87 +581,45 @@ async function interceptSubmission(event) {
 async function getEnhancedPrompt(query) {
   debugLog('Getting enhanced prompt for query:', query);
 
-  // Record start time for measuring API request duration
-  const startTime = Date.now();
-  let endNetworkTime; // Time when network response is received
-  let endTotalTime;  // Time when processing is complete
-  let responseData;
-
   try {
-    debugLog('Sending API request at:', new Date(startTime).toISOString());
-    const response = await fetch(API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        source: SOURCE,
-        user_id: USER_ID,
-        query: query
-      })
-    });
-
-    // Record the exact time when response is received (network time)
-    endNetworkTime = Date.now();
-    const networkDuration = endNetworkTime - startTime;
-
-    debugLog('API response received at:', new Date(endNetworkTime).toISOString());
-    debugLog('API response status:', response.status);
-    debugLog(`API network response time: ${networkDuration}ms`);
-
-    if (!response.ok) {
-      throw new Error(`API responded with status: ${response.status}`);
+    // Ensure we have access to the API service
+    if (!window.ApiService) {
+      console.error('API Service not available');
+      return query;
     }
-
-    // Parse the response - this also takes time but isn't part of the network time
-    const parseStartTime = Date.now();
-    responseData = await response.json();
-    endTotalTime = Date.now();
-
-    const parseTime = endTotalTime - parseStartTime;
-    const totalDuration = endTotalTime - startTime;
-
-    debugLog('API response parsing time:', parseTime, 'ms');
-    debugLog('API total time (network + parsing):', totalDuration, 'ms');
-    debugLog('API response data:', responseData);
-
-    if (responseData.status !== "success") {
-      throw new Error(`API returned error status: ${responseData.status}`);
+    
+    // Record start time for measuring total operation time
+    const startTime = Date.now();
+    
+    // Call the API service
+    const result = await window.ApiService.getEnhancedPrompt(query, USER_ID, SOURCE);
+    
+    // Calculate total operation time
+    const totalTime = Date.now() - startTime;
+    debugLog(`Total operation time: ${totalTime}ms`);
+    
+    // If API call failed, return original query
+    if (!result.success) {
+      debugLog('API call failed, using original query:', result.error);
+      
+      if (result.error) {
+        // Show notification only for actual errors (not cooldown)
+        if (!result.error.includes('temporarily unavailable due to recent errors')) {
+          showNotification(`API error: ${result.error}. Using original prompt.`, true);
+        }
+      }
+      
+      return query;
     }
-
-    // Save API request data with precise timing
-    saveApiRequestData({
-      timestamp: new Date(startTime).toISOString(),
-      responseTimestamp: new Date(endNetworkTime).toISOString(),
-      query: query,
-      response: responseData.prompt,
-      networkDuration: networkDuration,     // Network time only
-      totalDuration: totalDuration,         // Total time including parsing
-      parsingDuration: parseTime,           // Just the parsing time
-      status: "success"
-    });
-
-    return responseData.prompt;
+    
+    // Log success and return enhanced prompt
+    debugLog('Successfully enhanced prompt, response time:', result.responseTime);
+    return result.data;
   } catch (error) {
-    endTotalTime = Date.now();
-    console.error("Error getting context:", error);
-    lastErrorTime = Date.now();
-    showNotification(`Error getting context: ${error.message}. Original prompt will be used for the next 2 minutes.`, true);
-
-    // Save failed API request data
-    saveApiRequestData({
-      timestamp: new Date(startTime).toISOString(),
-      responseTimestamp: endNetworkTime ? new Date(endNetworkTime).toISOString() : null,
-      endTime: new Date(endTotalTime).toISOString(),
-      query: query,
-      response: null,
-      networkDuration: endNetworkTime ? endNetworkTime - startTime : null,
-      totalDuration: endTotalTime - startTime,
-      status: "error",
-      error: error.message
-    });
-
-    throw error;
+    // Catch any unexpected errors
+    console.error("Unexpected error in getEnhancedPrompt:", error);
+    showNotification(`Error: ${error.message}. Using original prompt.`, true);
+    return query;
   }
 }
 
@@ -893,7 +850,7 @@ function toggleDebugMode() {
   showNotification(`Debug mode ${DEBUG ? 'enabled' : 'disabled'}`);
 }
 
-// Setup event listeners
+// Set up event listeners for extension features
 function setupEventListeners() {
   debugLog('Setting up event listeners');
   console.log('[Sidetrip DeepContext] Setting up event listeners, isEnhancementEnabled:', isEnhancementEnabled);
@@ -901,8 +858,7 @@ function setupEventListeners() {
   // Listen for form submissions
   document.addEventListener('submit', function (event) {
     debugLog('Form submit event detected:', event.target);
-    console.log('[Sidetrip DeepContext] Form submit detected, isSubmitting:', isSubmitting, 'isEnhancementEnabled:', isEnhancementEnabled);
-
+    
     // Skip if we're already in the submission process
     if (isSubmitting) {
       debugLog('Already submitting, allowing native form submission');
@@ -926,8 +882,7 @@ function setupEventListeners() {
   document.addEventListener('keydown', function (event) {
     if (event.key === 'Enter' && !event.shiftKey) {
       debugLog('Enter keypress detected');
-      console.log('[Sidetrip DeepContext] Enter keypress detected, isSubmitting:', isSubmitting, 'isEnhancementEnabled:', isEnhancementEnabled);
-
+      
       // Skip if we're already in the submission process
       if (isSubmitting) {
         debugLog('Already submitting, allowing native keydown');
@@ -942,8 +897,6 @@ function setupEventListeners() {
 
       const elements = getDomElements();
       const activeElement = document.activeElement;
-
-      debugLog('Active element:', activeElement);
 
       if (elements.textarea && activeElement === elements.textarea) {
         debugLog('Enter pressed in our textarea');
@@ -960,6 +913,7 @@ function setupEventListeners() {
         });
       }
     }
+    console.log('Enter keypress detected');
   }, true);
 
   // Listen for click on submit button
@@ -980,7 +934,6 @@ function setupEventListeners() {
 
     const elements = getDomElements();
     if (elements.submitButton && (event.target === elements.submitButton || elements.submitButton.contains(event.target))) {
-      console.log('[Sidetrip DeepContext] Submit button click detected, isEnhancementEnabled:', isEnhancementEnabled);
       debugLog('Click on submit button detected');
       interceptSubmission({
         target: elements.form,
@@ -1008,73 +961,88 @@ function setupEventListeners() {
       // Update enhancement state if changed
       if (changes.isEnhancementEnabled !== undefined) {
         isEnhancementEnabled = changes.isEnhancementEnabled.newValue;
-        console.log('[Sidetrip DeepContext] Enhancement state updated from storage:', isEnhancementEnabled);
-
+        debugLog('Enhancement state updated from storage:', isEnhancementEnabled);
+        
         // Update toggle button if it exists
         const toggleButton = document.querySelector('[data-sidetrip-button="true"]');
         if (toggleButton) {
-          // Update the aria-pressed attribute
-          toggleButton.setAttribute('aria-pressed', isEnhancementEnabled.toString());
-          toggleButton.title = isEnhancementEnabled ?
-            'Sidetrip context enhancement is enabled (click to disable)' :
-            'Sidetrip context enhancement is disabled (click to enable)';
-
-          // Update the styling by finding the parent div that contains the classes
-          const buttonContainerDiv = toggleButton.closest('div.inline-flex');
-          if (buttonContainerDiv) {
-            // Remove all classes and add the appropriate ones
-            buttonContainerDiv.classList.remove(...BUTTON_ENABLED_CLASSES, ...BUTTON_DISABLED_CLASSES);
-            buttonContainerDiv.classList.add(...(isEnhancementEnabled ? BUTTON_ENABLED_CLASSES : BUTTON_DISABLED_CLASSES));
-          }
+          updateButtonState(toggleButton, isEnhancementEnabled);
         }
-
+        
         // Show notification
-        showNotification(`Sidetrip context enhancement ${isEnhancementEnabled ? 'ENABLED' : 'DISABLED'}`, false, 3000);
+        showNotification(`Context enhancement ${isEnhancementEnabled ? 'enabled' : 'disabled'}`, false, 3000);
       }
-
+      
       // Update debug mode if changed
       if (changes.debugMode !== undefined) {
         DEBUG = changes.debugMode.newValue;
-        console.log('[Sidetrip DeepContext] Debug mode updated:', DEBUG);
+        debugLog('Debug mode updated:', DEBUG);
+      }
+      
+      // Update API configuration if changed
+      if (changes.apiUrl || changes.maxRetries || changes.timeout) {
+        updateApiConfiguration();
       }
     }
   });
 
-  // Listen for messages from popup
-  chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
-    console.log('[Sidetrip DeepContext] Received message:', message);
+  // Listen for messages from the extension popup or background script
+  chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
+    debugLog('Received message:', request);
 
-    if (message.action === 'updateEnhancementState') {
-      isEnhancementEnabled = message.isEnabled;
-      console.log('[Sidetrip DeepContext] Enhancement state updated from message:', isEnhancementEnabled);
-
-      // Update toggle button if it exists
-      const toggleButton = document.querySelector('[data-sidetrip-button="true"]');
-      if (toggleButton) {
-        // Update the aria-pressed attribute
-        toggleButton.setAttribute('aria-pressed', isEnhancementEnabled.toString());
-        toggleButton.title = isEnhancementEnabled ?
-          'Sidetrip context enhancement is enabled (click to disable)' :
-          'Sidetrip context enhancement is disabled (click to enable)';
-
-        // Update the styling by finding the parent div that contains the classes
-        const buttonContainerDiv = toggleButton.closest('div.inline-flex');
-        if (buttonContainerDiv) {
-          // Remove all classes and add the appropriate ones
-          buttonContainerDiv.classList.remove(...BUTTON_ENABLED_CLASSES, ...BUTTON_DISABLED_CLASSES);
-          buttonContainerDiv.classList.add(...(isEnhancementEnabled ? BUTTON_ENABLED_CLASSES : BUTTON_DISABLED_CLASSES));
-        }
+    // Check if it's an enhancement state update
+    if (request.action === 'updateEnhancementState') {
+      isEnhancementEnabled = request.isEnabled;
+      debugLog('Context enhancement state updated:', isEnhancementEnabled);
+      
+      // Update the button if it exists
+      const button = document.querySelector('[data-sidetrip-button="true"]');
+      if (button) {
+        updateButtonState(button, isEnhancementEnabled);
       }
-
-      // Show notification
-      showNotification(`Sidetrip context enhancement ${isEnhancementEnabled ? 'ENABLED' : 'DISABLED'}`, false, 3000);
-
-      // Send response
-      sendResponse({ success: true });
+      
+      sendResponse({success: true});
+      return true;
     }
-
-    // Always return true to indicate async response
-    return true;
+    
+    // Check if it's a DOM selector update
+    if (request.action === 'updateSelectors') {
+      debugLog('Updating DOM selectors');
+      currentSelectors = request.selectors;
+      sendResponse({success: true});
+      return true;
+    }
+    
+    // Check if it's a debug mode toggle
+    if (request.action === 'updateDebugMode') {
+      debugLog('Updating debug mode');
+      DEBUG = request.debugMode;
+      sendResponse({success: true});
+      return true;
+    }
+    
+    // Check if it's an API configuration update
+    if (request.action === 'updateApiConfig') {
+      debugLog('Updating API configuration');
+      if (window.ApiService) {
+        try {
+          // Update the API service configuration
+          window.ApiService.apiUrl = request.config.apiUrl;
+          window.ApiService.maxRetries = request.config.maxRetries;
+          window.ApiService.timeout = request.config.timeout;
+          
+          debugLog('API configuration updated:', request.config);
+          sendResponse({success: true});
+        } catch (error) {
+          console.error('Error updating API config:', error);
+          sendResponse({success: false, error: error.message});
+        }
+      } else {
+        console.error('API Service not available');
+        sendResponse({success: false, error: 'API Service not available'});
+      }
+      return true;
+    }
   });
 
   // Listen for messages from background script
@@ -1109,144 +1077,56 @@ function setupEventListeners() {
   debugLog('Event listeners setup complete');
 }
 
-// Initialize the extension
-function initializeExtension() {
-  console.log('[Sidetrip DeepContext] Initializing extension');
-
-  // Load preferences right away to get the correct toggle state
-  chrome.storage.sync.get(['domSelectors', 'lastErrorTime', 'isEnhancementEnabled', 'debugMode'], function (result) {
-    console.log('[Sidetrip DeepContext] Loaded preferences:', result);
-
-    if (result.domSelectors) {
-      currentSelectors = { ...DEFAULT_SELECTORS, ...result.domSelectors };
-      debugLog('Loaded custom selectors:', currentSelectors);
-    }
-
-    if (result.lastErrorTime) {
-      lastErrorTime = result.lastErrorTime;
-      debugLog('Loaded last error time:', new Date(lastErrorTime));
-    }
-
-    if (result.isEnhancementEnabled !== undefined) {
-      isEnhancementEnabled = result.isEnhancementEnabled;
-      console.log('[Sidetrip DeepContext] Initial enhancement state:', isEnhancementEnabled);
-    }
-
-    // Update DEBUG setting if present
-    if (result.debugMode !== undefined) {
-      DEBUG = result.debugMode;
-      console.log('[Sidetrip DeepContext] Debug mode:', DEBUG ? 'enabled' : 'disabled');
-    }
-
-    // Continue initialization after loading preferences
-    continueInitialization();
-  });
+// Helper function to update the button state
+function updateButtonState(button, isEnabled) {
+  debugLog('Updating button state to:', isEnabled);
+  
+  // Update the button attributes
+  button.setAttribute('aria-pressed', isEnabled.toString());
+  button.title = isEnabled ?
+    'Sidetrip context enhancement is enabled (click to disable)' :
+    'Sidetrip context enhancement is disabled (click to enable)';
+  
+  // Update the button styling
+  const buttonContainer = button.closest('div[class*="inline-flex"]');
+  if (buttonContainer) {
+    // Remove all classes
+    const classesToRemove = [...BUTTON_ENABLED_CLASSES, ...BUTTON_DISABLED_CLASSES];
+    buttonContainer.classList.remove(...classesToRemove);
+    
+    // Add appropriate classes
+    buttonContainer.classList.add(...(isEnabled ? 
+      BUTTON_ENABLED_CLASSES : BUTTON_DISABLED_CLASSES));
+  }
 }
 
-// Continue initialization after preferences are loaded
-function continueInitialization() {
-  // Set up the button observer to detect when the submit button appears or changes
-  setupButtonObserver();
-
-  // Periodically check for UI elements and ensure buttons exist (backup for observer)
-  const periodicUICheck = setInterval(() => {
-    const elements = getDomElements();
-
-    // Log the current state periodically in debug mode
-    if (DEBUG) {
-      debugLog('Periodic UI check - current state:', {
-        form: !!elements.form,
-        textarea: !!elements.textarea,
-        hasContent: elements.hasContent,
-        buttonExists: elements.buttonExists,
-        isButtonDisabled: elements.isButtonDisabled,
-        isButtonClickable: elements.isButtonClickable
-      });
-    }
-
-    if (elements.form && elements.textarea) {
-      // Check if the toggle button exists
-      if (!document.querySelector('[data-sidetrip-button="true"]')) {
-        console.log('[Sidetrip DeepContext] Toggle button not found, creating it');
-        createToggleButton();
-      }
-
-      // If all is well, clear the interval after a while (still keeping observer)
-      if (document.querySelector('[data-sidetrip-button="true"]')) {
-        debugLog('UI is fully set up, clearing periodic check');
-        clearInterval(periodicUICheck);
-      }
-    }
-  }, 3000);  // Check every 3 seconds as a backup
-
-  // Also clear the check after 60 seconds no matter what
-  setTimeout(() => {
-    if (periodicUICheck) {
-      clearInterval(periodicUICheck);
-      debugLog('Cleared periodic UI check after timeout');
-    }
-  }, 60000);
-
-  // Set up a mutation observer to watch for the ChatGPT UI to be ready
-  const observer = new MutationObserver((mutations, obs) => {
-    const elements = getDomElements();
-    if (elements.form && elements.textarea) {
-      debugLog('All required elements found, initializing UI');
-
-      // Check if we've already created the buttons
-      const hasToggleButton = !!document.querySelector('[data-sidetrip-button="true"]');
-
-      if (!hasToggleButton) {
-        setupEventListeners();
-        createToggleButton();
-      }
-
-      // Create a debug indicator element
-      if (!document.querySelector('[data-chatgpt-enhancer="debug-indicator"]')) {
-        const debugIndicator = document.createElement('div');
-        debugIndicator.setAttribute('data-chatgpt-enhancer', 'debug-indicator');
-        debugIndicator.style.display = 'none';
-        document.body.appendChild(debugIndicator);
-      }
-
-      // Only disconnect if we've found everything AND created the buttons
-      if (hasToggleButton) {
-        debugLog('Everything is set up, disconnecting observer');
-        obs.disconnect();
-        debugLog('Initialization complete');
-      }
-    }
-  });
-
-  // Start observing with a more aggressive configuration
-  observer.observe(document.body, {
-    childList: true,
-    subtree: true,
-    attributes: true,
-    characterData: false,
-    attributeFilter: ['class', 'id', 'data-testid']
-  });
-
-  // Safety timeout after 30 seconds
-  setTimeout(() => {
-    if (observer) {
-      debugLog('Safety timeout reached, stopping observer');
-      observer.disconnect();
-
-      // Force attempt to set up UI even if not all elements were found
-      setupEventListeners();
-      createToggleButton();
-    }
-  }, 30000);
+// Helper function to update API configuration from storage
+function updateApiConfiguration() {
+  if (window.ApiService) {
+    chrome.storage.sync.get(['apiUrl', 'maxRetries', 'timeout'], function(result) {
+      if (result.apiUrl) window.ApiService.apiUrl = result.apiUrl;
+      if (result.maxRetries) window.ApiService.maxRetries = result.maxRetries;
+      if (result.timeout) window.ApiService.timeout = result.timeout;
+      debugLog('API configuration updated from storage');
+    });
+  }
 }
 
 // Initialize when DOM is fully loaded
 if (document.readyState === 'loading') {
   debugLog('Document still loading, adding DOMContentLoaded listener');
-  document.addEventListener('DOMContentLoaded', initializeExtension);
+  document.addEventListener('DOMContentLoaded', function() {
+    loadPreferences();
+    setupEventListeners();
+    setupButtonObserver();
+    createToggleButton();
+  });
 } else {
   debugLog('Document already loaded, initializing immediately');
-  initializeExtension();
+  loadPreferences();
+  setupEventListeners();
+  setupButtonObserver();
+  createToggleButton();
 }
 
 // Log that extension is active
@@ -1476,7 +1356,7 @@ async function waitForSubmitButton(maxAttempts = 10, delayMs = 200) {
         elements: elements
       };
     }
-    
+
     // If textarea has no content, button won't appear
     if (!elements.hasContent) {
       debugLog('Textarea has no content, submit button will not appear');

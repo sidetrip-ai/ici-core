@@ -5,6 +5,13 @@ const DEFAULT_SELECTORS = {
   submitButton: 'button[data-testid="send-button"]'
 };
 
+// Default API settings
+const DEFAULT_API_CONFIG = {
+  apiUrl: 'http://localhost:8000/getContext',
+  maxRetries: 3,
+  timeout: 15000
+};
+
 // DOM Elements
 const formSelectorInput = document.getElementById('formSelector');
 const textareaSelectorInput = document.getElementById('textareaSelector');
@@ -19,6 +26,14 @@ const statusMsg = document.getElementById('statusMsg');
 const requestCountElem = document.getElementById('requestCount');
 const avgTimeElem = document.getElementById('avgTime');
 const successRateElem = document.getElementById('successRate');
+
+// API Configuration elements
+const apiUrlInput = document.getElementById('apiUrl');
+const maxRetriesInput = document.getElementById('maxRetries');
+const timeoutInput = document.getElementById('timeout');
+const checkApiButton = document.getElementById('checkApi');
+const saveApiConfigButton = document.getElementById('saveApiConfig');
+const apiStatusElem = document.getElementById('apiStatus');
 
 // Load saved selectors
 function loadSavedSelectors() {
@@ -121,6 +136,15 @@ function loadApiStats() {
       successRate: successRate,
       showingDualTimes: avgNetworkTime > 0 && avgTotalTime > 0 && Math.abs(avgNetworkTime - avgTotalTime) > 2
     });
+  });
+}
+
+// Load API configuration
+function loadApiConfiguration() {
+  chrome.storage.sync.get(['apiUrl', 'maxRetries', 'timeout'], function(result) {
+    apiUrlInput.value = result.apiUrl || DEFAULT_API_CONFIG.apiUrl;
+    maxRetriesInput.value = result.maxRetries || DEFAULT_API_CONFIG.maxRetries;
+    timeoutInput.value = result.timeout || DEFAULT_API_CONFIG.timeout;
   });
 }
 
@@ -271,17 +295,104 @@ function showStatus(message, type) {
   }, 3000);
 }
 
-// Event Listeners
-saveButton.addEventListener('click', saveSelectors);
-resetButton.addEventListener('click', resetToDefaults);
-enhancementToggle.addEventListener('change', toggleEnhancement);
-debugToggle.addEventListener('change', toggleDebugMode);
-exportButton.addEventListener('click', exportApiData);
-clearDataButton.addEventListener('click', clearApiData);
+// Show API status message
+function showApiStatus(message, type) {
+  apiStatusElem.textContent = message;
+  apiStatusElem.className = `status ${type}`;
+  apiStatusElem.style.display = 'block';
+  
+  // Hide after 5 seconds if it's a success message
+  if (type === 'success') {
+    setTimeout(() => {
+      apiStatusElem.style.display = 'none';
+    }, 5000);
+  }
+}
 
-// Initialize
+// Save API configuration
+function saveApiConfig() {
+  const apiUrl = apiUrlInput.value.trim();
+  const maxRetries = parseInt(maxRetriesInput.value) || DEFAULT_API_CONFIG.maxRetries;
+  const timeout = parseInt(timeoutInput.value) || DEFAULT_API_CONFIG.timeout;
+  
+  // Basic URL validation
+  try {
+    new URL(apiUrl);
+  } catch (e) {
+    showApiStatus('Invalid URL format', 'error');
+    return;
+  }
+  
+  // Save to storage
+  chrome.storage.sync.set({
+    apiUrl: apiUrl,
+    maxRetries: maxRetries,
+    timeout: timeout
+  }, function() {
+    showApiStatus('API configuration saved', 'success');
+    
+    // Notify open tabs about the config change
+    chrome.tabs.query({url: ['*://chat.openai.com/*', '*://chatgpt.com/*']}, function(tabs) {
+      tabs.forEach(tab => {
+        chrome.tabs.sendMessage(tab.id, { 
+          action: 'updateApiConfig', 
+          config: { apiUrl, maxRetries, timeout } 
+        });
+      });
+    });
+  });
+}
+
+// Check API health
+function checkApiHealth() {
+  const apiUrl = apiUrlInput.value.trim();
+  
+  // Basic URL validation
+  try {
+    new URL(apiUrl);
+  } catch (e) {
+    showApiStatus('Invalid URL format', 'error');
+    return;
+  }
+  
+  // Show checking status
+  showApiStatus('Checking API connection...', 'info');
+  
+  // Request check from background script
+  chrome.runtime.sendMessage(
+    { action: 'checkApiHealth', apiUrl: apiUrl },
+    function(response) {
+      if (chrome.runtime.lastError) {
+        showApiStatus(`Error: ${chrome.runtime.lastError.message}`, 'error');
+        return;
+      }
+      
+      if (response.available) {
+        showApiStatus(`API is available (${response.status})`, 'success');
+      } else {
+        showApiStatus(`API error: ${response.message}`, 'error');
+      }
+    }
+  );
+}
+
+// DOM Ready event handler
 document.addEventListener('DOMContentLoaded', function() {
+  // Load saved settings
   loadSavedSelectors();
   loadToggleSettings();
   loadApiStats();
+  loadApiConfiguration();
+  
+  // Set up event listeners
+  saveButton.addEventListener('click', saveSelectors);
+  resetButton.addEventListener('click', resetToDefaults);
+  enhancementToggle.addEventListener('change', toggleEnhancement);
+  debugToggle.addEventListener('change', toggleDebugMode);
+  exportButton.addEventListener('click', exportApiData);
+  clearDataButton.addEventListener('click', clearApiData);
+  
+  // API configuration event listeners
+  saveApiConfigButton.addEventListener('click', saveApiConfig);
+  checkApiButton.addEventListener('click', checkApiHealth);
 }); 
