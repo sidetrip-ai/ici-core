@@ -1,0 +1,6 @@
+Natural Language Processing (NLP) is a branch of AI.
+It helps computers understand and work with human language.
+Common NLP tasks include:
+- Text classification
+- Named Entity Recognition
+- Machine Translation
